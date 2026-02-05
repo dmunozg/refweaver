@@ -2,6 +2,7 @@
 
 from typing import List, Optional
 
+from pydantic import HttpUrl
 from semanticscholar import SemanticScholar
 
 from refweaver.models import Article
@@ -35,7 +36,7 @@ class SemanticScholarAdapter:
                 names.append(name)
         return names
 
-    def _to_article(self, paper) -> Article:
+    def _to_article(self, paper:dict[str,str]) -> Article:
         """Convert a Semantic Scholar paper object to an Article.
 
         Args:
@@ -50,6 +51,13 @@ class SemanticScholarAdapter:
 
         # Extract authors
         authors = self._parse_authors(getattr(paper, "authors", []) or [])
+
+        # validate input
+        pdf_url_input = getattr(paper, "openAccessPdf", None).get("url")
+        try:
+            pdf_url = HttpUrl(pdf_url_input) if pdf_url_input else None
+        except Exception:
+            pdf_url = None
 
         # Build Article
         return Article(
@@ -68,14 +76,14 @@ class SemanticScholarAdapter:
             doi=getattr(paper, "doi", None),
             abstract=getattr(paper, "abstract", None),
             url=getattr(paper, "url", None),
-            pdf_url=getattr(paper, "openAccessPdf", {}).get("url")
+            pdf_url=pdf_url
             if isinstance(getattr(paper, "openAccessPdf", None), dict)
             else None,
             open_access=getattr(paper, "isOpenAccess", False) or False,
             citation_count=getattr(paper, "citationCount", None),
         )
 
-    def _to_article_from_dict(self, paper: dict) -> Article:
+    def _to_article_from_dict(self, paper: dict[str, str]) -> Article:
         """Convert a Semantic Scholar paper dict to an Article."""
         authors = []
         for author in paper.get("authors", []):
@@ -89,12 +97,17 @@ class SemanticScholarAdapter:
         open_access_pdf = paper.get("openAccessPdf", {})
         pdf_url = open_access_pdf.get("url") if isinstance(open_access_pdf, dict) else None
 
+        year_int = int(paper.get("year")) if paper.get("year") is not None else None
+        
+        url_str = paper.get("url")
+        url = HttpUrl(url_str) if url_str else None
+
         return Article(
             source=self.SOURCE_NAME,
             external_id=paper.get("paperId", ""),
             title=paper.get("title", ""),
             authors=authors,
-            year=paper.get("year"),
+            year=year_int,
             journal=paper.get("venue"),
             publication_type=paper.get("publicationTypes", ["article"])[0]
             if paper.get("publicationTypes")
@@ -104,7 +117,7 @@ class SemanticScholarAdapter:
             pages=paper.get("pages"),
             doi=paper.get("doi"),
             abstract=paper.get("abstract"),
-            url=paper.get("url"),
+            url=url,
             pdf_url=pdf_url,
             open_access=paper.get("isOpenAccess", False),
             citation_count=paper.get("citationCount"),
