@@ -2613,9 +2613,11 @@ name = "refweaver"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "beautifulsoup4" },
     { name = "loguru" },
     { name = "pyalex" },
     { name = "pydantic-ai" },
+    { name = "requests" },
     { name = "scholarly" },
     { name = "semanticscholar" },
 ]
@@ -2630,12 +2632,14 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "beautifulsoup4", specifier = ">=4.12.0" },
     { name = "loguru", specifier = ">=0.7.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.13.0" },
     { name = "pyalex", specifier = ">=0.20.0" },
     { name = "pydantic-ai", specifier = ">=0.0.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0.0" },
+    { name = "requests", specifier = ">=2.32.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6.0" },
     { name = "scholarly", specifier = ">=1.7.11" },
     { name = "semanticscholar", specifier = ">=0.11.0" },
