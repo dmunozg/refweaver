@@ -38,3 +38,16 @@ models/
 *.pkl
 *.pth
 *.bin
+
+# Testing
+.coverage
+coverage/
+htmlcov/
+.pytest_cache/
+
+# Jupyter
+*.ipynb
+.ipynb_checkpoints/
+
+# uv
+uv.lock
