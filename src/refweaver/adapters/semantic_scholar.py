@@ -128,6 +128,8 @@ class SemanticScholarAdapter:
             List of Article objects.
         """
         if fields is None:
+            # Note: volume, issue, pages, doi are not available in search endpoint
+            # but are available when fetching paper by ID
             fields = [
                 "paperId",
                 "title",
@@ -135,10 +137,6 @@ class SemanticScholarAdapter:
                 "year",
                 "venue",
                 "publicationTypes",
-                "volume",
-                "issue",
-                "pages",
-                "doi",
                 "abstract",
                 "url",
                 "openAccessPdf",
