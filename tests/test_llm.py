@@ -1,9 +1,7 @@
 """Tests for LLM client with pydantic-ai structured output."""
 
-from unittest.mock import MagicMock, patch
 
 import pytest
-from pydantic_ai import Agent
 
 from refweaver.llm import (
     ArticleRelevance,
@@ -102,7 +100,7 @@ class TestOutputModels:
     def test_article_relevance_confidence_validation(self):
         """Test confidence value validation."""
         # Should raise validation error for out-of-range confidence
-        with pytest.raises(Exception):  # pydantic.ValidationError
+        with pytest.raises(ValueError):  # pydantic.ValidationError
             ArticleRelevance(
                 relevant=True,
                 confidence=1.5,  # Out of range
@@ -112,9 +110,9 @@ class TestOutputModels:
     def test_search_keywords_min_max_items(self):
         """Test SearchKeywords min/max validation."""
         # Empty list should fail
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             SearchKeywords(keywords=[])
 
         # More than 5 items should fail
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             SearchKeywords(keywords=["a", "b", "c", "d", "e", "f"])

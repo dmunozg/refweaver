@@ -1,11 +1,10 @@
 """Tests for sentence analysis pipeline."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from refweaver.analyzer import SentenceAnalyzer
-from refweaver.llm import SearchKeywords, SentenceAnalysis, ArticleRelevance
 from refweaver.models import Article, Sentence
 
 

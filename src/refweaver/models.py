@@ -1,7 +1,6 @@
 """Data models for RefWeaver."""
 
 from datetime import date
-from typing import List, Optional
 
 from pydantic import BaseModel, Field, HttpUrl
 
@@ -34,30 +33,30 @@ class Article(BaseModel):
 
     # Core metadata
     title: str
-    authors: List[str]
-    year: Optional[int] = None
-    journal: Optional[str] = None
-    publication_type: Optional[str] = Field(
+    authors: list[str]
+    year: int | None = None
+    journal: str | None = None
+    publication_type: str | None = Field(
         default="article",
         description="article, review, preprint, etc.",
     )
 
     # Citation details
-    volume: Optional[str] = None
-    issue: Optional[str] = None
-    pages: Optional[str] = None
-    doi: Optional[str] = None
+    volume: str | None = None
+    issue: str | None = None
+    pages: str | None = None
+    doi: str | None = None
 
     # Content
-    abstract: Optional[str] = None
+    abstract: str | None = None
 
     # Access
-    url: Optional[HttpUrl] = None  # Landing page
-    pdf_url: Optional[HttpUrl] = None  # Direct PDF link
+    url: HttpUrl | None = None  # Landing page
+    pdf_url: HttpUrl | None = None  # Direct PDF link
     open_access: bool = False
 
     # Metrics
-    citation_count: Optional[int] = None
+    citation_count: int | None = None
 
     # Internal
     retrieved_at: date = Field(default_factory=date.today)

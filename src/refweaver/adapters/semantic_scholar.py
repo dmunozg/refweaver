@@ -1,6 +1,6 @@
 """Semantic Scholar adapter for RefWeaver."""
 
-from typing import Any, List, Optional
+from typing import Any
 
 from pydantic import HttpUrl
 from semanticscholar import SemanticScholar  # type: ignore[import-untyped]
@@ -16,7 +16,7 @@ class SemanticScholarAdapter:
 
     SOURCE_NAME = "semanticscholar"
 
-    def __init__(self, api_key: Optional[str] = None) -> None:
+    def __init__(self, api_key: str | None = None) -> None:
         """Initialize the Semantic Scholar client.
 
         Args:
@@ -24,14 +24,15 @@ class SemanticScholarAdapter:
         """
         self.client = SemanticScholar(api_key=api_key)
 
-    def _parse_authors(self, authors: List[Any]) -> List[str]:
+    def _parse_authors(self, authors: list[Any]) -> list[str]:
         """Extract author names from Semantic Scholar author objects."""
         names = []
         for author in authors:
-            if isinstance(author, dict):
-                name = author.get("name")
-            else:
-                name = getattr(author, "name", None)
+            name = (
+                author.get("name")
+                if isinstance(author, dict)
+                else getattr(author, "name", None)
+            )
             if name:
                 names.append(name)
         return names
@@ -54,11 +55,11 @@ class SemanticScholarAdapter:
 
         # Handle PDF URL with validation
         open_access_pdf: Any = getattr(paper, "openAccessPdf", None)
-        pdf_url_input: Optional[str] = None
+        pdf_url_input: str | None = None
         if isinstance(open_access_pdf, dict):
             pdf_url_input = open_access_pdf.get("url")
 
-        pdf_url: Optional[HttpUrl] = None
+        pdf_url: HttpUrl | None = None
         if pdf_url_input:
             try:
                 pdf_url = HttpUrl(pdf_url_input)
@@ -67,7 +68,7 @@ class SemanticScholarAdapter:
 
         # Handle year conversion
         year_raw: Any = getattr(paper, "year", None)
-        year: Optional[int] = None
+        year: int | None = None
         if year_raw is not None:
             try:
                 year = int(year_raw)
@@ -76,7 +77,7 @@ class SemanticScholarAdapter:
 
         # Handle URL
         url_input: Any = getattr(paper, "url", None)
-        url: Optional[HttpUrl] = None
+        url: HttpUrl | None = None
         if url_input:
             try:
                 url = HttpUrl(str(url_input))
@@ -89,7 +90,7 @@ class SemanticScholarAdapter:
 
         # Handle citation_count (could be string or int)
         citation_count_raw: Any = getattr(paper, "citationCount", None)
-        citation_count: Optional[int] = None
+        citation_count: int | None = None
         if citation_count_raw is not None:
             try:
                 citation_count = int(citation_count_raw)
@@ -120,21 +121,18 @@ class SemanticScholarAdapter:
 
     def _to_article_from_dict(self, paper: dict[str, Any]) -> Article:
         """Convert a Semantic Scholar paper dict to an Article."""
-        authors: List[str] = []
+        authors: list[str] = []
         for author in paper.get("authors", []):
-            if isinstance(author, dict):
-                name = author.get("name")
-            else:
-                name = str(author)
+            name = author.get("name") if isinstance(author, dict) else str(author)
             if name:
                 authors.append(name)
 
         open_access_pdf: Any = paper.get("openAccessPdf", {})
-        pdf_url_str: Optional[str] = None
+        pdf_url_str: str | None = None
         if isinstance(open_access_pdf, dict):
             pdf_url_str = open_access_pdf.get("url")
 
-        pdf_url: Optional[HttpUrl] = None
+        pdf_url: HttpUrl | None = None
         if pdf_url_str:
             try:
                 pdf_url = HttpUrl(pdf_url_str)
@@ -143,7 +141,7 @@ class SemanticScholarAdapter:
 
         # Handle year conversion safely
         year_raw: Any = paper.get("year")
-        year: Optional[int] = None
+        year: int | None = None
         if year_raw is not None:
             try:
                 year = int(year_raw)
@@ -152,7 +150,7 @@ class SemanticScholarAdapter:
 
         # Handle URL
         url_str: Any = paper.get("url")
-        url: Optional[HttpUrl] = None
+        url: HttpUrl | None = None
         if url_str:
             try:
                 url = HttpUrl(str(url_str))
@@ -165,7 +163,7 @@ class SemanticScholarAdapter:
 
         # Handle citation_count (could be string or int)
         citation_count_raw: Any = paper.get("citationCount")
-        citation_count: Optional[int] = None
+        citation_count: int | None = None
         if citation_count_raw is not None:
             try:
                 citation_count = int(citation_count_raw)
@@ -197,8 +195,8 @@ class SemanticScholarAdapter:
         self,
         query: str,
         limit: int = 10,
-        fields: Optional[List[str]] = None,
-    ) -> List[Article]:
+        fields: list[str] | None = None,
+    ) -> list[Article]:
         """Search for papers on Semantic Scholar.
 
         Args:
@@ -235,7 +233,7 @@ class SemanticScholarAdapter:
 
         return [self._to_article(paper) for paper in results[:limit]]
 
-    def get_paper_by_doi(self, doi: str) -> Optional[Article]:
+    def get_paper_by_doi(self, doi: str) -> Article | None:
         """Fetch a paper by its DOI.
 
         Args:
@@ -250,7 +248,7 @@ class SemanticScholarAdapter:
         except Exception:
             return None
 
-    def get_paper_by_id(self, paper_id: str) -> Optional[Article]:
+    def get_paper_by_id(self, paper_id: str) -> Article | None:
         """Fetch a paper by its Semantic Scholar ID.
 
         Args:

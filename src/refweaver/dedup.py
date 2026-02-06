@@ -1,7 +1,6 @@
 """Utilities for deduplicating articles from multiple sources."""
 
 import re
-from typing import List, Optional, Set
 
 from pydantic import HttpUrl
 
@@ -34,8 +33,8 @@ def title_similarity(title1: str, title2: str) -> float:
     if norm1 == norm2:
         return 1.0
 
-    words1: Set[str] = set(norm1.split())
-    words2: Set[str] = set(norm2.split())
+    words1: set[str] = set(norm1.split())
+    words2: set[str] = set(norm2.split())
 
     if not words1 or not words2:
         return 0.0
@@ -47,7 +46,7 @@ def title_similarity(title1: str, title2: str) -> float:
     return len(intersection) / len(union)
 
 
-def author_overlap(authors1: List[str], authors2: List[str]) -> float:
+def author_overlap(authors1: list[str], authors2: list[str]) -> float:
     """Calculate the overlap ratio between two author lists.
 
     Returns 0.0 to 1.0 based on shared authors.
@@ -60,8 +59,8 @@ def author_overlap(authors1: List[str], authors2: List[str]) -> float:
         # Lowercase and remove extra whitespace
         return ' '.join(name.lower().split())
 
-    set1: Set[str] = {normalize_author(a) for a in authors1}
-    set2: Set[str] = {normalize_author(a) for a in authors2}
+    set1: set[str] = {normalize_author(a) for a in authors1}
+    set2: set[str] = {normalize_author(a) for a in authors2}
 
     intersection = set1 & set2
     smaller_set_size = min(len(set1), len(set2))
@@ -108,9 +107,12 @@ def are_articles_duplicate(
             return True
 
     # If years don't match, they're probably not the same article
-    if article1.year is not None and article2.year is not None:
-        if article1.year != article2.year:
-            return False
+    if (
+        article1.year is not None
+        and article2.year is not None
+        and article1.year != article2.year
+    ):
+        return False
 
     # Check title similarity
     title_sim = title_similarity(article1.title, article2.title)
@@ -119,18 +121,15 @@ def are_articles_duplicate(
 
     # Check author overlap
     author_sim = author_overlap(article1.authors, article2.authors)
-    if author_sim < author_threshold:
-        return False
-
-    # If we get here: titles are similar, authors overlap, and years match
-    return True
+    # Return True if titles are similar, authors overlap, and years match
+    return author_sim >= author_threshold
 
 
 def deduplicate_articles(
-    articles: List[Article],
+    articles: list[Article],
     title_threshold: float = 0.85,
     author_threshold: float = 0.5,
-) -> List[Article]:
+) -> list[Article]:
     """Remove duplicate articles from a list.
 
     Keeps the first occurrence of each article. Prefers articles with
@@ -147,7 +146,7 @@ def deduplicate_articles(
     if not articles:
         return []
 
-    unique_articles: List[Article] = []
+    unique_articles: list[Article] = []
 
     for article in articles:
         is_duplicate = False
@@ -172,7 +171,7 @@ def deduplicate_articles(
     return unique_articles
 
 
-def merge_articles(articles: List[Article]) -> Optional[Article]:
+def merge_articles(articles: list[Article]) -> Article | None:
     """Merge multiple articles representing the same paper into one.
 
     Combines metadata from all sources, preferring non-null values.
@@ -194,14 +193,14 @@ def merge_articles(articles: List[Article]) -> Optional[Article]:
     base = articles[0]
 
     # Helper to get first non-null value
-    def pick(*values: Optional[str]) -> Optional[str]:
+    def pick(*values: str | None) -> str | None:
         for v in values:
             if v is not None and v != "":
                 return v
         return None
 
     # Collect all authors (union)
-    all_authors: Set[str] = set()
+    all_authors: set[str] = set()
     for article in articles:
         all_authors.update(article.authors)
 
@@ -221,7 +220,7 @@ def merge_articles(articles: List[Article]) -> Optional[Article]:
 
     # Find best URL
     url_str = pick(*[str(a.url) if a.url else None for a in articles])
-    url: Optional[HttpUrl] = None
+    url: HttpUrl | None = None
     if url_str:
         try:
             url = HttpUrl(url_str)

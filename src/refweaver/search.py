@@ -1,7 +1,7 @@
 """Unified search across multiple academic search engines."""
 
 import warnings
-from typing import Any, List, Optional
+from typing import Any
 
 from loguru import logger
 
@@ -21,8 +21,8 @@ class UnifiedSearch:
 
     def __init__(
         self,
-        semantic_scholar_api_key: Optional[str] = None,
-        openalex_email: Optional[str] = None,
+        semantic_scholar_api_key: str | None = None,
+        openalex_email: str | None = None,
         use_scholarly_proxy: bool = False,
     ) -> None:
         """Initialize the unified search with all adapters.
@@ -47,14 +47,14 @@ class UnifiedSearch:
         self,
         query: str,
         limit: int = 10,
-        limit_per_source: Optional[int] = None,
+        limit_per_source: int | None = None,
         use_semantic_scholar: bool = True,
         use_openalex: bool = True,
         use_google_scholar: bool = True,
         deduplicate: bool = True,
         title_threshold: float = 0.85,
         author_threshold: float = 0.5,
-    ) -> List[Article]:
+    ) -> list[Article]:
         """Search across multiple academic databases.
 
         Searches the specified sources and returns combined results.
@@ -84,9 +84,9 @@ class UnifiedSearch:
         if limit_per_source is None:
             limit_per_source = limit
 
-        all_articles: List[Article] = []
-        failed_sources: List[str] = []
-        successful_sources: List[str] = []
+        all_articles: list[Article] = []
+        failed_sources: list[str] = []
+        successful_sources: list[str] = []
 
         sources: list[tuple[str, bool, Any]] = [
             ("Semantic Scholar", use_semantic_scholar, self.semantic_scholar),
@@ -167,7 +167,7 @@ class UnifiedSearch:
         source: str,
         query: str,
         limit: int = 10,
-    ) -> List[Article]:
+    ) -> list[Article]:
         """Search a single source by name.
 
         Args:

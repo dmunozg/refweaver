@@ -5,7 +5,6 @@ as well as other text preprocessing utilities.
 """
 
 import re
-from typing import List
 
 try:
     from nltk.tokenize import sent_tokenize  # type: ignore[import-untyped]
@@ -15,7 +14,7 @@ except ImportError:
     NLTK_AVAILABLE = False
 
 
-def split_paragraphs(text: str) -> List[str]:
+def split_paragraphs(text: str) -> list[str]:
     """Split text into paragraphs based on blank lines.
 
     Args:
@@ -36,7 +35,7 @@ def split_paragraphs(text: str) -> List[str]:
     return [p.strip() for p in paragraphs if p.strip()]
 
 
-def split_sentences(text: str) -> List[str]:
+def split_sentences(text: str) -> list[str]:
     """Split text into sentences using NLTK's Punkt tokenizer.
 
     Requires NLTK to be installed and the 'punkt' data downloaded.
@@ -75,7 +74,7 @@ def split_sentences(text: str) -> List[str]:
     return sentences
 
 
-def preprocess_manuscript(text: str) -> List[List[str]]:
+def preprocess_manuscript(text: str) -> list[list[str]]:
     """Split a manuscript into paragraphs, then each paragraph into sentences.
 
     This is the main entry point for processing manuscript text.

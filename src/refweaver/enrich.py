@@ -1,6 +1,5 @@
 """Article enrichment utilities to fill missing metadata."""
 
-from typing import Optional
 
 from loguru import logger
 
@@ -22,10 +21,10 @@ class ArticleEnricher:
 
     def __init__(
         self,
-        semantic_scholar_api_key: Optional[str] = None,
-        openalex_email: Optional[str] = None,
+        semantic_scholar_api_key: str | None = None,
+        openalex_email: str | None = None,
         use_llm_extractor: bool = False,
-        llm_config: Optional[LLMConfig] = None,
+        llm_config: LLMConfig | None = None,
     ) -> None:
         """Initialize the enricher with all adapters.
 
@@ -42,7 +41,7 @@ class ArticleEnricher:
         self.google_scholar: GoogleScholarAdapter = GoogleScholarAdapter()
 
         self.use_llm_extractor = use_llm_extractor
-        self.llm_client: Optional[LLMClient] = None
+        self.llm_client: LLMClient | None = None
 
         if use_llm_extractor:
             self.llm_client = LLMClient(config=llm_config)
@@ -156,10 +155,9 @@ class ArticleEnricher:
         """
         from selenium import webdriver
         from selenium.webdriver.chrome.options import Options
-        from selenium.webdriver.chrome.service import Service
         from selenium.webdriver.common.by import By
-        from selenium.webdriver.support.ui import WebDriverWait
         from selenium.webdriver.support import expected_conditions as EC
+        from selenium.webdriver.support.ui import WebDriverWait
 
         logger.debug(f"Using Selenium to fetch: {url}")
 
@@ -232,7 +230,9 @@ class ArticleEnricher:
                 html = self._fetch_html_selenium(url)
             except Exception as selenium_error:
                 logger.error(f"Selenium also failed: {selenium_error}")
-                raise Exception(f"Failed to fetch {url}: requests failed ({e}), Selenium failed ({selenium_error})")
+                raise Exception(
+                    f"Failed to fetch {url}: requests failed ({e}), Selenium failed ({selenium_error})"
+                ) from selenium_error
 
         # Parse HTML and extract text
         soup = BeautifulSoup(html, "html.parser")
@@ -363,14 +363,14 @@ class ArticleEnricher:
         if try_cross_api:
             article = self._fill_from_cross_api(article)
             if article.abstract:
-                logger.success(f"Abstract filled via cross-API lookup")
+                logger.success("Abstract filled via cross-API lookup")
                 return article
 
         # Strategy 3: LLM web extraction
         if try_llm and self.use_llm_extractor:
             article = self._extract_with_llm(article)
             if article.abstract:
-                logger.success(f"Abstract filled via LLM extraction")
+                logger.success("Abstract filled via LLM extraction")
                 return article
 
         logger.warning(f"Could not fill abstract for: {article.title[:50]}...")

@@ -1,13 +1,11 @@
 """Tests for text processing utilities."""
 
-import pytest
 
 from refweaver.text_utils import (
     preprocess_manuscript,
     split_paragraphs,
     split_sentences,
 )
-
 from tests.fixtures.sample_texts import (
     MULTIPLE_PARAGRAPH_SAMPLE,
     SAMPLE_INTRODUCTION,

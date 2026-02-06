@@ -1,9 +1,9 @@
 """Google Scholar adapter for RefWeaver using scholarly library."""
 
-from typing import Any, List, Optional
+from typing import Any
 
 from pydantic import HttpUrl
-from scholarly import scholarly, ProxyGenerator  # type: ignore[import-untyped]
+from scholarly import ProxyGenerator, scholarly  # type: ignore[import-untyped]
 
 from refweaver.models import Article
 
@@ -34,7 +34,7 @@ class GoogleScholarAdapter:
                 # Proxy setup failed, continue without
                 pass
 
-    def _parse_authors(self, author_data: Any) -> List[str]:
+    def _parse_authors(self, author_data: Any) -> list[str]:
         """Extract author names from scholarly author field.
 
         Authors can be a single string "Author1 and Author2 and Author3"
@@ -54,7 +54,7 @@ class GoogleScholarAdapter:
 
         return []
 
-    def _extract_year(self, year_data: Any) -> Optional[int]:
+    def _extract_year(self, year_data: Any) -> int | None:
         """Extract year from various formats."""
         if year_data is None:
             return None
@@ -113,7 +113,7 @@ class GoogleScholarAdapter:
 
         # Get URLs
         url_str: Any = publication.get("pub_url") or bib.get("url")
-        url: Optional[HttpUrl] = None
+        url: HttpUrl | None = None
         if url_str:
             try:
                 url = HttpUrl(str(url_str))
@@ -122,7 +122,7 @@ class GoogleScholarAdapter:
 
         # Try to get PDF URL
         pdf_url_str: Any = publication.get("eprint_url") or publication.get("pdf_url")
-        pdf_url: Optional[HttpUrl] = None
+        pdf_url: HttpUrl | None = None
         if pdf_url_str:
             try:
                 pdf_url = HttpUrl(str(pdf_url_str))
@@ -133,7 +133,7 @@ class GoogleScholarAdapter:
         open_access = bool(pdf_url)
 
         # Get citation count
-        citation_count: Optional[int] = None
+        citation_count: int | None = None
         if "num_citations" in publication:
             try:
                 citation_count = int(publication["num_citations"])
@@ -168,7 +168,7 @@ class GoogleScholarAdapter:
         query: str,
         limit: int = 10,
         fill: bool = False,
-    ) -> List[Article]:
+    ) -> list[Article]:
         """Search for papers on Google Scholar.
 
         Args:
@@ -180,7 +180,7 @@ class GoogleScholarAdapter:
         Returns:
             List of Article objects.
         """
-        articles: List[Article] = []
+        articles: list[Article] = []
 
         try:
             # Get search results
@@ -207,7 +207,7 @@ class GoogleScholarAdapter:
 
         return articles
 
-    def get_paper_by_doi(self, doi: str) -> Optional[Article]:
+    def get_paper_by_doi(self, doi: str) -> Article | None:
         """Fetch a paper by its DOI.
 
         Note: Google Scholar doesn't have a direct DOI lookup,
@@ -245,7 +245,7 @@ class GoogleScholarAdapter:
         except Exception:
             return None
 
-    def get_paper_by_id(self, pub_id: str) -> Optional[Article]:
+    def get_paper_by_id(self, pub_id: str) -> Article | None:
         """Fetch a paper by its Google Scholar publication ID.
 
         Args:

@@ -4,7 +4,6 @@ Analyzes sentences from manuscript paragraphs to determine if they need referenc
 generates search keywords, and evaluates article relevance.
 """
 
-from typing import List
 
 from loguru import logger
 
@@ -25,7 +24,7 @@ class SentenceAnalyzer:
         self.llm = llm_client or LLMClient()
         logger.info("SentenceAnalyzer initialized")
 
-    def analyze_paragraph(self, paragraph: str) -> List[Sentence]:
+    def analyze_paragraph(self, paragraph: str) -> list[Sentence]:
         """Analyze all sentences in a paragraph.
 
         Args:
@@ -35,7 +34,7 @@ class SentenceAnalyzer:
             List of Sentence objects with reference analysis.
         """
         sentences = split_sentences(paragraph)
-        results: List[Sentence] = []
+        results: list[Sentence] = []
 
         for sent_text in sentences:
             analysis = self.llm.analyze_sentence_needs_reference(
@@ -56,7 +55,7 @@ class SentenceAnalyzer:
         logger.info(f"Analyzed {len(results)} sentences in paragraph")
         return results
 
-    def analyze_sentences(self, text: str) -> List[Sentence]:
+    def analyze_sentences(self, text: str) -> list[Sentence]:
         """Analyze all sentences in a text (paragraphs are processed together).
 
         This is a convenience method that splits text into paragraphs,
@@ -71,7 +70,7 @@ class SentenceAnalyzer:
         from refweaver.text_utils import split_paragraphs
 
         paragraphs = split_paragraphs(text)
-        all_sentences: List[Sentence] = []
+        all_sentences: list[Sentence] = []
 
         for para in paragraphs:
             sentences = self.analyze_paragraph(para)

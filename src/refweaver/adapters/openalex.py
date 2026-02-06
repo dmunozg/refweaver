@@ -1,9 +1,9 @@
 """OpenAlex adapter for RefWeaver."""
 
-from typing import Any, List, Optional
+from typing import Any
 
-from pydantic import HttpUrl
 from pyalex import Works  # type: ignore[import-untyped]
+from pydantic import HttpUrl
 
 from refweaver.models import Article
 
@@ -16,7 +16,7 @@ class OpenAlexAdapter:
 
     SOURCE_NAME = "openalex"
 
-    def __init__(self, api_key: Optional[str] = None) -> None:
+    def __init__(self, api_key: str | None = None) -> None:
         """Initialize the OpenAlex client.
 
         Args:
@@ -26,7 +26,7 @@ class OpenAlexAdapter:
             from pyalex import config as pyalex_config
             pyalex_config.email = api_key
 
-    def _parse_authors(self, authors: List[Any]) -> List[str]:
+    def _parse_authors(self, authors: list[Any]) -> list[str]:
         """Extract author names from OpenAlex author objects."""
         names = []
         for author in authors:
@@ -43,7 +43,7 @@ class OpenAlexAdapter:
                 names.append(name)
         return names
 
-    def _get_doi(self, work: dict[str, Any]) -> Optional[str]:
+    def _get_doi(self, work: dict[str, Any]) -> str | None:
         """Extract DOI from OpenAlex work."""
         doi: Any = work.get("doi")
         if doi:
@@ -57,7 +57,7 @@ class OpenAlexAdapter:
             return doi_str
         return None
 
-    def _get_pdf_url(self, work: dict[str, Any]) -> Optional[str]:
+    def _get_pdf_url(self, work: dict[str, Any]) -> str | None:
         """Extract PDF URL from OpenAlex work."""
         open_access: Any = work.get("open_access", {})
         if isinstance(open_access, dict):
@@ -96,7 +96,7 @@ class OpenAlexAdapter:
         """Convert an OpenAlex work dict to an Article."""
         # Extract authors
         authors_raw: Any = work.get("authorships", [])
-        authors: List[str] = []
+        authors: list[str] = []
         if isinstance(authors_raw, list):
             for authorship in authors_raw:
                 if isinstance(authorship, dict):
@@ -115,7 +115,7 @@ class OpenAlexAdapter:
 
         # Handle PDF URL
         pdf_url_str = self._get_pdf_url(work)
-        pdf_url: Optional[HttpUrl] = None
+        pdf_url: HttpUrl | None = None
         if pdf_url_str:
             try:
                 pdf_url = HttpUrl(pdf_url_str)
@@ -124,7 +124,7 @@ class OpenAlexAdapter:
 
         # Handle URL (OpenAlex page)
         url_str: Any = work.get("id")
-        url: Optional[HttpUrl] = None
+        url: HttpUrl | None = None
         if url_str:
             try:
                 url = HttpUrl(str(url_str))
@@ -133,7 +133,7 @@ class OpenAlexAdapter:
 
         # Handle year
         publication_date: Any = work.get("publication_date")
-        year: Optional[int] = None
+        year: int | None = None
         if publication_date:
             try:
                 year = int(str(publication_date)[:4])
@@ -153,7 +153,7 @@ class OpenAlexAdapter:
         source: Any = None
         if isinstance(primary_location, dict):
             source = primary_location.get("source", {})
-        journal: Optional[str] = None
+        journal: str | None = None
         if isinstance(source, dict):
             journal = source.get("display_name")
         elif source is not None:
@@ -165,7 +165,7 @@ class OpenAlexAdapter:
 
         # Handle citation count
         cited_by_count: Any = work.get("cited_by_count")
-        citation_count: Optional[int] = None
+        citation_count: int | None = None
         if cited_by_count is not None:
             try:
                 citation_count = int(cited_by_count)
@@ -180,9 +180,9 @@ class OpenAlexAdapter:
 
         # Handle biblio fields (volume, issue, pages)
         biblio: Any = work.get("biblio", {})
-        volume: Optional[str] = None
-        issue: Optional[str] = None
-        pages: Optional[str] = None
+        volume: str | None = None
+        issue: str | None = None
+        pages: str | None = None
         if isinstance(biblio, dict):
             volume = biblio.get("volume")
             issue = biblio.get("issue")
@@ -216,7 +216,7 @@ class OpenAlexAdapter:
         self,
         query: str,
         limit: int = 10,
-    ) -> List[Article]:
+    ) -> list[Article]:
         """Search for papers on OpenAlex.
 
         Args:
@@ -228,7 +228,7 @@ class OpenAlexAdapter:
         """
         works = Works().search(query).get(per_page=limit)
 
-        articles: List[Article] = []
+        articles: list[Article] = []
         for work in works:
             try:
                 article = self._to_article(work)
@@ -239,7 +239,7 @@ class OpenAlexAdapter:
 
         return articles
 
-    def get_paper_by_doi(self, doi: str) -> Optional[Article]:
+    def get_paper_by_doi(self, doi: str) -> Article | None:
         """Fetch a paper by its DOI.
 
         Args:
@@ -260,7 +260,7 @@ class OpenAlexAdapter:
         except Exception:
             return None
 
-    def get_paper_by_id(self, work_id: str) -> Optional[Article]:
+    def get_paper_by_id(self, work_id: str) -> Article | None:
         """Fetch a paper by its OpenAlex ID.
 
         Args:
