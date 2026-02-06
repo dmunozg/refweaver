@@ -1,6 +1,5 @@
 """Article enrichment utilities to fill missing metadata."""
 
-
 from loguru import logger
 
 from refweaver.adapters.openalex import OpenAlexAdapter
@@ -45,7 +44,9 @@ class ArticleEnricher:
 
         if use_llm_extractor:
             self.llm_client = LLMClient(config=llm_config)
-            logger.info(f"ArticleEnricher initialized with LLM extraction ({self.llm_client.model})")
+            logger.info(
+                f"ArticleEnricher initialized with LLM extraction ({self.llm_client._model_name})"
+            )
         else:
             logger.info("ArticleEnricher initialized (API methods only)")
 
@@ -60,7 +61,9 @@ class ArticleEnricher:
             if article.source == "semanticscholar" and article.external_id:
                 detailed = self.semantic_scholar.get_paper_by_id(article.external_id)
                 if detailed and detailed.abstract:
-                    logger.info(f"Filled abstract from Semantic Scholar for: {article.title[:50]}...")
+                    logger.info(
+                        f"Filled abstract from Semantic Scholar for: {article.title[:50]}..."
+                    )
                     return article.model_copy(update={"abstract": detailed.abstract})
 
             elif article.source == "openalex" and article.external_id:
@@ -85,6 +88,7 @@ class ArticleEnricher:
 
         # Try each adapter in order of reliability for abstracts
         from typing import Any
+
         adapters: list[tuple[str, Any]] = [
             ("OpenAlex", self.openalex),
             ("Semantic Scholar", self.semantic_scholar),
@@ -98,9 +102,7 @@ class ArticleEnricher:
             try:
                 filled = adapter.get_paper_by_doi(article.doi)
                 if filled and filled.abstract:
-                    logger.info(
-                        f"Filled abstract from {source_name} for: {article.title[:50]}..."
-                    )
+                    logger.info(f"Filled abstract from {source_name} for: {article.title[:50]}...")
                     return article.model_copy(update={"abstract": filled.abstract})
             except Exception as e:
                 logger.debug(f"{source_name} lookup failed: {e}")
@@ -290,7 +292,9 @@ class ArticleEnricher:
                     logger.debug(f"Fetching article URL: {url_str}")
                     url_text = self._fetch_html(url_str)
                     if url_text:
-                        html_sources.append(f"=== FROM ARTICLE URL ({url_str}) ===\n{url_text[:8000]}")
+                        html_sources.append(
+                            f"=== FROM ARTICLE URL ({url_str}) ===\n{url_text[:8000]}"
+                        )
                         logger.debug(f"Article URL fetched, text length: {len(url_text)}")
                 except Exception as e:
                     logger.debug(f"Article URL fetch failed: {e}")
