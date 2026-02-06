@@ -107,26 +107,133 @@ class ArticleEnricher:
 
         return article
 
+    def _fetch_html_requests(self, url: str) -> str:
+        """Fetch HTML using requests with browser-like headers.
+
+        Args:
+            url: URL to fetch.
+
+        Returns:
+            HTML content from the page.
+
+        Raises:
+            requests.HTTPError: If request fails (including 403).
+        """
+        import requests
+
+        # Enhanced headers to look more like a real browser
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Accept-Encoding": "gzip, deflate, br",
+            "DNT": "1",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Cache-Control": "max-age=0",
+        }
+
+        response = requests.get(url, headers=headers, timeout=15, allow_redirects=True)
+        response.raise_for_status()
+        return response.text
+
+    def _fetch_html_selenium(self, url: str) -> str:
+        """Fetch HTML using Selenium as fallback for blocked sites.
+
+        Args:
+            url: URL to fetch.
+
+        Returns:
+            HTML content from the page.
+
+        Raises:
+            Exception: If Selenium fails to fetch the page.
+        """
+        from selenium import webdriver
+        from selenium.webdriver.chrome.options import Options
+        from selenium.webdriver.chrome.service import Service
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import WebDriverWait
+        from selenium.webdriver.support import expected_conditions as EC
+
+        logger.debug(f"Using Selenium to fetch: {url}")
+
+        # Configure Chrome options for headless browsing
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--window-size=1920,1080")
+        chrome_options.add_argument(
+            "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
+
+        driver = None
+        try:
+            driver = webdriver.Chrome(options=chrome_options)
+            driver.get(url)
+
+            # Wait for page to load (wait for body element)
+            wait = WebDriverWait(driver, 10)
+            wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+
+            # Get page source
+            html = driver.page_source
+            logger.debug(f"Selenium successfully fetched page: {len(html)} chars")
+            return html
+
+        finally:
+            if driver:
+                driver.quit()
+
     def _fetch_html(self, url: str) -> str:
-        """Fetch and clean HTML from a URL.
+        """Fetch and clean HTML from a URL with fallback to Selenium.
+
+        First tries requests with browser headers, falls back to Selenium
+        if we get a 403 Forbidden (bot detection).
 
         Args:
             url: URL to fetch.
 
         Returns:
             Cleaned text content from the page.
+
+        Raises:
+            Exception: If both requests and Selenium fail.
         """
-        import requests
         from bs4 import BeautifulSoup
 
-        headers = {
-            "User-Agent": "Mozilla/5.0 (compatible; RefWeaver/0.1; Academic research tool)"
-        }
-        response = requests.get(url, headers=headers, timeout=10, allow_redirects=True)
-        response.raise_for_status()
+        html = ""
+
+        # Strategy 1: Try requests with enhanced headers
+        try:
+            logger.debug(f"Fetching with requests: {url}")
+            html = self._fetch_html_requests(url)
+            logger.debug(f"Requests succeeded: {len(html)} chars")
+        except Exception as e:
+            # Check if it's a 403 Forbidden
+            is_403 = False
+            if hasattr(e, "response") and e.response is not None:
+                is_403 = getattr(e.response, "status_code", None) == 403
+
+            if is_403:
+                logger.warning(f"Got 403 from {url}, falling back to Selenium")
+            else:
+                logger.debug(f"Requests failed ({e}), trying Selenium")
+
+            # Strategy 2: Fall back to Selenium
+            try:
+                html = self._fetch_html_selenium(url)
+            except Exception as selenium_error:
+                logger.error(f"Selenium also failed: {selenium_error}")
+                raise Exception(f"Failed to fetch {url}: requests failed ({e}), Selenium failed ({selenium_error})")
 
         # Parse HTML and extract text
-        soup = BeautifulSoup(response.text, "html.parser")
+        soup = BeautifulSoup(html, "html.parser")
 
         # Remove script and style elements
         for script in soup(["script", "style", "nav", "footer", "header"]):
