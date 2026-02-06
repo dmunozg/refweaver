@@ -197,19 +197,23 @@ class SentenceAnalyzer:
         sentence: str | Sentence,
         article: Article,
         fetch_fulltext: bool = True,
+        try_alternative_pdf_sources: bool = True,
+        unpaywall_email: str | None = None,
     ) -> dict[str, str | float | None]:
         """Multi-pass article evaluation: abstract -> landing page -> PDF.
 
         Phase 1: Evaluate using abstract
         Phase 2: If verdict is INSUFFICIENT_INFO/PARTIALLY_SUPPORTS and article
             is open access, fetch landing page and re-evaluate
-        Phase 3: If still insufficient and PDF is available, download PDF and
-            re-evaluate with full text
+        Phase 3: If still insufficient, try to get PDF (including alternative
+            sources like Unpaywall, Anna's Archive) and re-evaluate
 
         Args:
             sentence: The claim needing support (str or Sentence object).
             article: The candidate article to evaluate.
             fetch_fulltext: Whether to attempt fetching full text when needed.
+            try_alternative_pdf_sources: Whether to try Unpaywall, Anna's Archive, etc.
+            unpaywall_email: Email for Unpaywall API (optional but recommended).
 
         Returns:
             Dict with 'verdict', 'confidence', 'reasoning', 'suggested_modification',
@@ -230,7 +234,7 @@ class SentenceAnalyzer:
         )
         result["evaluation_source"] = "abstract"
 
-        if not fetch_fulltext or not article.open_access:
+        if not fetch_fulltext:
             return result
 
         verdict = result.get("verdict", "")
@@ -263,14 +267,18 @@ class SentenceAnalyzer:
                     f"Could not fetch landing page for: {article.title[:50]}..."
                 )
 
-        # Phase 3: Try PDF if still needed and available
-        if verdict in ("INSUFFICIENT_INFO", "PARTIALLY_SUPPORTS") and article.pdf_url:
+        # Phase 3: Try PDF if still needed (including alternative sources)
+        if verdict in ("INSUFFICIENT_INFO", "PARTIALLY_SUPPORTS"):
             logger.info(
                 f"Verdict still {verdict}, attempting PDF download "
                 f"for: {article.title[:50]}..."
             )
 
-            pdf_text = try_get_fulltext_from_pdf(article)
+            pdf_text = try_get_fulltext_from_pdf(
+                article,
+                try_alternative_sources=try_alternative_pdf_sources,
+                email=unpaywall_email,
+            )
 
             if pdf_text:
                 logger.info(f"Re-evaluating with PDF content ({len(pdf_text)} chars)")

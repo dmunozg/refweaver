@@ -125,24 +125,42 @@ async def download_and_extract_pdf_async(url: str, timeout: int = 60) -> str | N
         return None
 
 
-def try_get_fulltext_from_pdf(article: "Article") -> str | None:
-    """Try to get full text from PDF URL if article is open access.
+def try_get_fulltext_from_pdf(
+    article: "Article",
+    try_alternative_sources: bool = True,
+    email: str | None = None,
+) -> str | None:
+    """Try to get full text from PDF using multiple sources.
+
+    First tries the article's own pdf_url, then tries alternative sources
+    (Unpaywall, Anna's Archive, direct DOI resolution) if enabled.
 
     Args:
         article: The Article to get PDF from.
+        try_alternative_sources: Whether to try Unpaywall, Anna's Archive, etc.
+        email: Email for Unpaywall API.
 
     Returns:
         Extracted text from PDF, or None if not available/failed.
     """
-    if not article.open_access:
-        logger.debug(f"Article not open access, skipping PDF: {article.title[:50]}...")
-        return None
+    # First, try the article's own pdf_url (if open access)
+    if article.pdf_url and article.open_access:
+        url = str(article.pdf_url)
+        logger.info(f"Attempting to download PDF from article URL: {article.title[:50]}...")
+        text = download_and_extract_pdf(url)
+        if text:
+            return text
 
-    if not article.pdf_url:
-        logger.debug(f"No PDF URL available: {article.title[:50]}...")
-        return None
+    # Try alternative sources
+    if try_alternative_sources:
+        from refweaver.pdf_sources import find_pdf_url
 
-    url = str(article.pdf_url)
-    logger.info(f"Attempting to download PDF for: {article.title[:50]}...")
+        logger.info(f"Trying alternative sources for PDF: {article.title[:50]}...")
+        alt_url = find_pdf_url(article, email=email)
 
-    return download_and_extract_pdf(url)
+        if alt_url:
+            logger.info(f"Found alternative PDF URL, downloading...")
+            return download_and_extract_pdf(alt_url)
+
+    logger.debug(f"Could not get PDF text for: {article.title[:50]}...")
+    return None
