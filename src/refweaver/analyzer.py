@@ -191,3 +191,126 @@ class SentenceAnalyzer:
             article_year=article.year,
             fulltext_content=fulltext_content,
         )
+
+    def evaluate_article_with_landing_page(
+        self,
+        sentence: str | Sentence,
+        article: Article,
+        fetch_fulltext: bool = True,
+    ) -> dict[str, str | float | None]:
+        """Two-pass article evaluation using abstract then landing page.
+
+        First evaluates using the abstract. If the article is open access and
+        the initial verdict suggests more information would be helpful
+        (INSUFFICIENT_INFO or PARTIALLY_SUPPORTS), fetches the landing page
+        and re-evaluates with the full text content.
+
+        Args:
+            sentence: The claim needing support (str or Sentence object).
+            article: The candidate article to evaluate.
+            fetch_fulltext: Whether to attempt fetching landing page for
+                open access articles when needed.
+
+        Returns:
+            Dict with 'verdict', 'confidence', 'reasoning', 'suggested_modification',
+            and 'evaluation_source' ("abstract" or "fulltext") indicating which
+            was used for the final result.
+        """
+        from refweaver.web_fetch import fetch_article_landing_page
+
+        sentence_text = sentence.text if isinstance(sentence, Sentence) else sentence
+
+        # Phase 1: Evaluate using abstract
+        result = self.llm.evaluate_article_relevance(
+            sentence=sentence_text,
+            article_title=article.title,
+            article_authors=article.authors,
+            article_year=article.year,
+            article_abstract=article.abstract,
+        )
+        result["evaluation_source"] = "abstract"
+
+        # Phase 2: If needed and possible, fetch landing page and re-evaluate
+        if fetch_fulltext and article.open_access:
+            verdict = result.get("verdict", "")
+            if verdict in ("INSUFFICIENT_INFO", "PARTIALLY_SUPPORTS"):
+                logger.info(
+                    f"Verdict is {verdict}, attempting landing page fetch "
+                    f"for: {article.title[:50]}..."
+                )
+
+                landing_page_text = fetch_article_landing_page(article)
+
+                if landing_page_text:
+                    logger.info(
+                        f"Re-evaluating with landing page content "
+                        f"({len(landing_page_text)} chars)"
+                    )
+                    fulltext_result = self.llm.evaluate_article_relevance_fulltext(
+                        sentence=sentence_text,
+                        article_title=article.title,
+                        article_authors=article.authors,
+                        article_year=article.year,
+                        fulltext_content=landing_page_text,
+                    )
+                    fulltext_result["evaluation_source"] = "fulltext"
+                    return fulltext_result
+                else:
+                    logger.warning(
+                        f"Could not fetch landing page for: {article.title[:50]}..."
+                    )
+
+        return result
+
+    async def evaluate_article_with_landing_page_async(
+        self,
+        sentence: str | Sentence,
+        article: Article,
+        fetch_fulltext: bool = True,
+    ) -> dict[str, str | float | None]:
+        """Async version of evaluate_article_with_landing_page."""
+        from refweaver.web_fetch import fetch_article_landing_page_async
+
+        sentence_text = sentence.text if isinstance(sentence, Sentence) else sentence
+
+        # Phase 1: Evaluate using abstract
+        result = await self.llm.evaluate_article_relevance_async(
+            sentence=sentence_text,
+            article_title=article.title,
+            article_authors=article.authors,
+            article_year=article.year,
+            article_abstract=article.abstract,
+        )
+        result["evaluation_source"] = "abstract"
+
+        # Phase 2: If needed and possible, fetch landing page and re-evaluate
+        if fetch_fulltext and article.open_access:
+            verdict = result.get("verdict", "")
+            if verdict in ("INSUFFICIENT_INFO", "PARTIALLY_SUPPORTS"):
+                logger.info(
+                    f"Verdict is {verdict}, attempting async landing page fetch "
+                    f"for: {article.title[:50]}..."
+                )
+
+                landing_page_text = await fetch_article_landing_page_async(article)
+
+                if landing_page_text:
+                    logger.info(
+                        f"Re-evaluating with landing page content "
+                        f"({len(landing_page_text)} chars)"
+                    )
+                    fulltext_result = await self.llm.evaluate_article_relevance_fulltext_async(
+                        sentence=sentence_text,
+                        article_title=article.title,
+                        article_authors=article.authors,
+                        article_year=article.year,
+                        fulltext_content=landing_page_text,
+                    )
+                    fulltext_result["evaluation_source"] = "fulltext"
+                    return fulltext_result
+                else:
+                    logger.warning(
+                        f"Could not fetch landing page for: {article.title[:50]}..."
+                    )
+
+        return result

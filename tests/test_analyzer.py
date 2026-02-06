@@ -1,6 +1,6 @@
 """Tests for sentence analysis pipeline."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -366,3 +366,135 @@ class TestEvaluateArticleRelevance:
         assert call_kwargs["article_authors"] == ["Alice Smith", "Bob Jones", "Carol White", "David Lee"]
         assert call_kwargs["article_year"] == 2023
         assert call_kwargs["article_abstract"] == "Detailed abstract here."
+
+
+class TestEvaluateArticleWithLandingPage:
+    """Test suite for two-pass evaluation with landing page fetch."""
+
+    @patch("refweaver.web_fetch.fetch_article_landing_page")
+    def test_two_pass_abstract_sufficient(self, mock_fetch):
+        """Test when abstract evaluation gives clear verdict."""
+        mock_llm = MagicMock()
+        mock_llm.evaluate_article_relevance.return_value = {
+            "verdict": "SUPPORTS",
+            "confidence": 0.90,
+            "reasoning": "Clear support from abstract.",
+            "suggested_modification": None,
+        }
+
+        analyzer = SentenceAnalyzer(llm_client=mock_llm)
+        article = Article(
+            source="test",
+            external_id="123",
+            title="Test Article",
+            authors=["Author"],
+            open_access=True,
+            abstract="Clear abstract.",
+        )
+
+        result = analyzer.evaluate_article_with_landing_page(
+            "Test claim.", article
+        )
+
+        assert result["verdict"] == "SUPPORTS"
+        assert result["evaluation_source"] == "abstract"
+        # Should not fetch landing page since verdict is clear
+        mock_fetch.assert_not_called()
+
+    @patch("refweaver.web_fetch.fetch_article_landing_page")
+    def test_two_pass_fetches_landing_page(self, mock_fetch):
+        """Test landing page fetch when verdict is INSUFFICIENT_INFO."""
+        mock_llm = MagicMock()
+        mock_llm.evaluate_article_relevance.return_value = {
+            "verdict": "INSUFFICIENT_INFO",
+            "confidence": 0.30,
+            "reasoning": "Abstract too brief.",
+            "suggested_modification": None,
+        }
+        mock_llm.evaluate_article_relevance_fulltext.return_value = {
+            "verdict": "SUPPORTS",
+            "confidence": 0.85,
+            "reasoning": "Full text provides clear evidence.",
+            "suggested_modification": None,
+        }
+
+        mock_fetch.return_value = "Full article content here with more details."
+
+        analyzer = SentenceAnalyzer(llm_client=mock_llm)
+        article = Article(
+            source="test",
+            external_id="123",
+            title="Test Article",
+            authors=["Author"],
+            open_access=True,
+            abstract="Brief abstract.",
+        )
+
+        result = analyzer.evaluate_article_with_landing_page(
+            "Test claim.", article
+        )
+
+        assert result["verdict"] == "SUPPORTS"
+        assert result["evaluation_source"] == "fulltext"
+        mock_fetch.assert_called_once()
+        mock_llm.evaluate_article_relevance_fulltext.assert_called_once()
+
+    @patch("refweaver.web_fetch.fetch_article_landing_page")
+    def test_two_pass_skips_non_open_access(self, mock_fetch):
+        """Test that landing page is not fetched for non-open-access."""
+        mock_llm = MagicMock()
+        mock_llm.evaluate_article_relevance.return_value = {
+            "verdict": "INSUFFICIENT_INFO",
+            "confidence": 0.30,
+            "reasoning": "Abstract too brief.",
+            "suggested_modification": None,
+        }
+
+        analyzer = SentenceAnalyzer(llm_client=mock_llm)
+        article = Article(
+            source="test",
+            external_id="123",
+            title="Test Article",
+            authors=["Author"],
+            open_access=False,  # Not open access
+            abstract="Brief abstract.",
+        )
+
+        result = analyzer.evaluate_article_with_landing_page(
+            "Test claim.", article
+        )
+
+        assert result["verdict"] == "INSUFFICIENT_INFO"
+        assert result["evaluation_source"] == "abstract"
+        mock_fetch.assert_not_called()
+
+    @patch("refweaver.web_fetch.fetch_article_landing_page")
+    def test_two_pass_fetch_failure_fallback(self, mock_fetch):
+        """Test fallback to abstract when landing page fetch fails."""
+        mock_llm = MagicMock()
+        mock_llm.evaluate_article_relevance.return_value = {
+            "verdict": "PARTIALLY_SUPPORTS",
+            "confidence": 0.60,
+            "reasoning": "Some support from abstract.",
+            "suggested_modification": None,
+        }
+
+        mock_fetch.return_value = None  # Fetch fails
+
+        analyzer = SentenceAnalyzer(llm_client=mock_llm)
+        article = Article(
+            source="test",
+            external_id="123",
+            title="Test Article",
+            authors=["Author"],
+            open_access=True,
+            abstract="Partial abstract.",
+        )
+
+        result = analyzer.evaluate_article_with_landing_page(
+            "Test claim.", article
+        )
+
+        assert result["verdict"] == "PARTIALLY_SUPPORTS"
+        assert result["evaluation_source"] == "abstract"
+        mock_fetch.assert_called_once()
