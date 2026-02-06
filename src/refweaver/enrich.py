@@ -107,48 +107,110 @@ class ArticleEnricher:
 
         return article
 
-    def _extract_with_llm(self, article: Article) -> Article:
-        """Extract abstract by fetching URL and parsing with local LLM.
+    def _fetch_html(self, url: str) -> str:
+        """Fetch and clean HTML from a URL.
 
-        This is a fallback method that fetches the article's landing page
-        and uses a local LLM to extract the abstract text.
+        Args:
+            url: URL to fetch.
+
+        Returns:
+            Cleaned text content from the page.
         """
-        if article.abstract or not article.url or not self.use_llm_extractor:
+        import requests
+        from bs4 import BeautifulSoup
+
+        headers = {
+            "User-Agent": "Mozilla/5.0 (compatible; RefWeaver/0.1; Academic research tool)"
+        }
+        response = requests.get(url, headers=headers, timeout=10, allow_redirects=True)
+        response.raise_for_status()
+
+        # Parse HTML and extract text
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        # Remove script and style elements
+        for script in soup(["script", "style", "nav", "footer", "header"]):
+            script.decompose()
+
+        # Get text content
+        text = soup.get_text(separator="\n", strip=True)
+
+        return text
+
+    def _extract_with_llm(self, article: Article) -> Article:
+        """Extract abstract by fetching URLs and parsing with local LLM.
+
+        This is a fallback method that fetches both the article's landing page
+        and the DOI-resolved page (if available), then uses a local LLM to
+        extract the abstract text from whichever source has more content.
+
+        Args:
+            article: Article to enrich.
+
+        Returns:
+            Article with extracted abstract if successful, otherwise original.
+        """
+        if article.abstract or not self.use_llm_extractor:
+            return article
+
+        # Need at least one URL to fetch
+        if not article.url and not article.doi:
             return article
 
         logger.debug(f"Attempting LLM extraction for: {article.title[:50]}...")
 
+        html_sources: list[str] = []
+
         try:
-            # Fetch the page content
-            import requests
-            from bs4 import BeautifulSoup
+            # Strategy 1: Try DOI URL first (usually redirects to publisher page with abstract)
+            if article.doi:
+                doi_url = f"https://doi.org/{article.doi}"
+                try:
+                    logger.debug(f"Fetching DOI URL: {doi_url}")
+                    doi_text = self._fetch_html(doi_url)
+                    if doi_text:
+                        html_sources.append(f"=== FROM DOI URL ({doi_url}) ===\n{doi_text[:8000]}")
+                        logger.debug(f"DOI URL fetched, text length: {len(doi_text)}")
+                except Exception as e:
+                    logger.debug(f"DOI URL fetch failed: {e}")
 
-            headers = {
-                "User-Agent": "Mozilla/5.0 (compatible; RefWeaver/0.1; Academic research tool)"
-            }
-            response = requests.get(str(article.url), headers=headers, timeout=10)
-            response.raise_for_status()
+            # Strategy 2: Try article URL as fallback (might be OpenAlex/Semantic Scholar page)
+            if article.url:
+                try:
+                    url_str = str(article.url)
+                    logger.debug(f"Fetching article URL: {url_str}")
+                    url_text = self._fetch_html(url_str)
+                    if url_text:
+                        html_sources.append(f"=== FROM ARTICLE URL ({url_str}) ===\n{url_text[:8000]}")
+                        logger.debug(f"Article URL fetched, text length: {len(url_text)}")
+                except Exception as e:
+                    logger.debug(f"Article URL fetch failed: {e}")
 
-            # Parse HTML and extract text
-            soup = BeautifulSoup(response.text, "html.parser")
+            if not html_sources:
+                logger.warning(f"No HTML content could be fetched for: {article.title[:50]}...")
+                return article
 
-            # Remove script and style elements
-            for script in soup(["script", "style", "nav", "footer", "header"]):
-                script.decompose()
+            # Combine sources for LLM processing
+            combined_text = "\n\n".join(html_sources)
 
-            # Get text content
-            text = soup.get_text(separator="\n", strip=True)
-
-            # Limit text length for LLM
-            text = text[:8000]  # First 8K chars should contain abstract
-
-            # Use LLM to extract abstract
-            # TODO: Implement actual LLM call with pydantic-ai
-            # For now, log that we would do this
             logger.info(
                 f"LLM extraction ready for: {article.title[:50]}... "
-                f"(text length: {len(text)} chars)"
+                f"(sources: {len(html_sources)}, total length: {len(combined_text)} chars)"
             )
+
+            # TODO: Implement actual LLM call with pydantic-ai
+            # The LLM should:
+            # 1. Look at both sources
+            # 2. Extract the abstract text
+            # 3. Return clean abstract or None if not found
+            #
+            # Example prompt structure:
+            # "Extract the abstract from the following web page content.
+            #  Look for sections labeled 'Abstract', 'Summary', etc.
+            #  Return only the abstract text, or 'NO_ABSTRACT_FOUND' if not present.
+            #  
+            #  Content:
+            #  {combined_text}"
 
             # Placeholder - return unchanged
             # Actual implementation would use pydantic-ai here
