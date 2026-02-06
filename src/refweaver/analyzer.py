@@ -198,24 +198,24 @@ class SentenceAnalyzer:
         article: Article,
         fetch_fulltext: bool = True,
     ) -> dict[str, str | float | None]:
-        """Two-pass article evaluation using abstract then landing page.
+        """Multi-pass article evaluation: abstract -> landing page -> PDF.
 
-        First evaluates using the abstract. If the article is open access and
-        the initial verdict suggests more information would be helpful
-        (INSUFFICIENT_INFO or PARTIALLY_SUPPORTS), fetches the landing page
-        and re-evaluates with the full text content.
+        Phase 1: Evaluate using abstract
+        Phase 2: If verdict is INSUFFICIENT_INFO/PARTIALLY_SUPPORTS and article
+            is open access, fetch landing page and re-evaluate
+        Phase 3: If still insufficient and PDF is available, download PDF and
+            re-evaluate with full text
 
         Args:
             sentence: The claim needing support (str or Sentence object).
             article: The candidate article to evaluate.
-            fetch_fulltext: Whether to attempt fetching landing page for
-                open access articles when needed.
+            fetch_fulltext: Whether to attempt fetching full text when needed.
 
         Returns:
             Dict with 'verdict', 'confidence', 'reasoning', 'suggested_modification',
-            and 'evaluation_source' ("abstract" or "fulltext") indicating which
-            was used for the final result.
+            and 'evaluation_source' ("abstract", "landing_page", or "pdf").
         """
+        from refweaver.pdf_extract import try_get_fulltext_from_pdf
         from refweaver.web_fetch import fetch_article_landing_page
 
         sentence_text = sentence.text if isinstance(sentence, Sentence) else sentence
@@ -230,35 +230,62 @@ class SentenceAnalyzer:
         )
         result["evaluation_source"] = "abstract"
 
-        # Phase 2: If needed and possible, fetch landing page and re-evaluate
-        if fetch_fulltext and article.open_access:
-            verdict = result.get("verdict", "")
-            if verdict in ("INSUFFICIENT_INFO", "PARTIALLY_SUPPORTS"):
+        if not fetch_fulltext or not article.open_access:
+            return result
+
+        verdict = result.get("verdict", "")
+
+        # Phase 2: Try landing page if needed
+        if verdict in ("INSUFFICIENT_INFO", "PARTIALLY_SUPPORTS"):
+            logger.info(
+                f"Verdict is {verdict}, attempting landing page fetch "
+                f"for: {article.title[:50]}..."
+            )
+
+            landing_page_text = fetch_article_landing_page(article, use_selenium=True)
+
+            if landing_page_text:
                 logger.info(
-                    f"Verdict is {verdict}, attempting landing page fetch "
-                    f"for: {article.title[:50]}..."
+                    f"Re-evaluating with landing page content "
+                    f"({len(landing_page_text)} chars)"
+                )
+                result = self.llm.evaluate_article_relevance_fulltext(
+                    sentence=sentence_text,
+                    article_title=article.title,
+                    article_authors=article.authors,
+                    article_year=article.year,
+                    fulltext_content=landing_page_text,
+                )
+                result["evaluation_source"] = "landing_page"
+                verdict = result.get("verdict", "")
+            else:
+                logger.warning(
+                    f"Could not fetch landing page for: {article.title[:50]}..."
                 )
 
-                landing_page_text = fetch_article_landing_page(article)
+        # Phase 3: Try PDF if still needed and available
+        if verdict in ("INSUFFICIENT_INFO", "PARTIALLY_SUPPORTS") and article.pdf_url:
+            logger.info(
+                f"Verdict still {verdict}, attempting PDF download "
+                f"for: {article.title[:50]}..."
+            )
 
-                if landing_page_text:
-                    logger.info(
-                        f"Re-evaluating with landing page content "
-                        f"({len(landing_page_text)} chars)"
-                    )
-                    fulltext_result = self.llm.evaluate_article_relevance_fulltext(
-                        sentence=sentence_text,
-                        article_title=article.title,
-                        article_authors=article.authors,
-                        article_year=article.year,
-                        fulltext_content=landing_page_text,
-                    )
-                    fulltext_result["evaluation_source"] = "fulltext"
-                    return fulltext_result
-                else:
-                    logger.warning(
-                        f"Could not fetch landing page for: {article.title[:50]}..."
-                    )
+            pdf_text = try_get_fulltext_from_pdf(article)
+
+            if pdf_text:
+                logger.info(f"Re-evaluating with PDF content ({len(pdf_text)} chars)")
+                # Limit PDF text to avoid token limits
+                limited_text = pdf_text[:50000]  # ~50k chars should be plenty
+                result = self.llm.evaluate_article_relevance_fulltext(
+                    sentence=sentence_text,
+                    article_title=article.title,
+                    article_authors=article.authors,
+                    article_year=article.year,
+                    fulltext_content=limited_text,
+                )
+                result["evaluation_source"] = "pdf"
+            else:
+                logger.warning(f"Could not download PDF for: {article.title[:50]}...")
 
         return result
 

@@ -1,6 +1,7 @@
 """Web content fetching utilities for RefWeaver.
 
 Provides functions to fetch and extract text content from article landing pages.
+Uses Selenium as primary method since many publisher sites require JavaScript.
 """
 
 from typing import TYPE_CHECKING
@@ -12,44 +13,12 @@ if TYPE_CHECKING:
     from refweaver.models import Article
 
 
-def _fetch_with_requests(url: str, timeout: int) -> str:
-    """Fetch HTML using requests with browser-like headers.
+def _fetch_with_selenium(url: str, timeout: int = 30) -> str:
+    """Fetch HTML using Selenium (handles JavaScript-heavy sites).
 
     Args:
         url: URL to fetch.
-        timeout: Request timeout in seconds.
-
-    Returns:
-        HTML content.
-
-    Raises:
-        requests.RequestException: If the request fails.
-    """
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        ),
-        "Accept": (
-            "text/html,application/xhtml+xml,application/xml;q=0.9,"
-            "image/webp,*/*;q=0.8"
-        ),
-        "Accept-Language": "en-US,en;q=0.5",
-        "Accept-Encoding": "gzip, deflate, br",
-        "DNT": "1",
-        "Connection": "keep-alive",
-    }
-
-    response = requests.get(url, headers=headers, timeout=timeout, allow_redirects=True)
-    response.raise_for_status()
-    return response.text
-
-
-def _fetch_with_selenium(url: str) -> str:
-    """Fetch HTML using Selenium as fallback for bot detection.
-
-    Args:
-        url: URL to fetch.
+        timeout: Page load timeout in seconds.
 
     Returns:
         HTML content.
@@ -79,124 +48,59 @@ def _fetch_with_selenium(url: str) -> str:
     driver = None
     try:
         driver = webdriver.Chrome(options=chrome_options)
+        driver.set_page_load_timeout(timeout)
         driver.get(url)
 
         # Wait for page to load
         wait = WebDriverWait(driver, 10)
         wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
 
+        # Give extra time for JavaScript to render content
+        import time
+        time.sleep(2)
+
         html = driver.page_source
         logger.debug(f"Selenium successfully fetched page: {len(html)} chars")
+
+        # Check if we got a "JavaScript required" message
+        if "javascript" in html.lower() and ("enable" in html.lower() or "required" in html.lower()):
+            if len(html) < 5000:  # Likely just a JS warning page
+                logger.warning("Page requires JavaScript but content may not have loaded properly")
+
         return html
     finally:
         if driver:
             driver.quit()
 
 
-def fetch_article_landing_page(article: "Article", timeout: int = 30) -> str | None:
-    """Fetch and extract text content from an article's landing page.
-
-    This is useful for open-access articles where the full text is available
-    on the publisher's website. The extracted text can be used for more
-    thorough LLM evaluation.
-
-    First tries requests, falls back to Selenium on 403 Forbidden (bot detection).
+def _fetch_with_requests(url: str, timeout: int) -> str:
+    """Fetch HTML using requests (faster but may not work on JS-heavy sites).
 
     Args:
-        article: The Article to fetch content for.
+        url: URL to fetch.
         timeout: Request timeout in seconds.
 
     Returns:
-        Extracted text content, or None if fetching failed.
+        HTML content.
+
+    Raises:
+        requests.RequestException: If the request fails.
     """
-    if not article.open_access:
-        logger.debug(
-            f"Article '{article.title[:50]}...' is not open access, skipping fetch"
-        )
-        return None
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        ),
+        "Accept": (
+            "text/html,application/xhtml+xml,application/xml;q=0.9,"
+            "image/webp,*/*;q=0.8"
+        ),
+        "Accept-Language": "en-US,en;q=0.5",
+    }
 
-    # Determine URL to fetch
-    url: str | None = None
-    if article.url:
-        url = str(article.url)
-    elif article.doi:
-        url = f"https://doi.org/{article.doi}"
-    elif article.pdf_url:
-        url = str(article.pdf_url)
-
-    if not url:
-        logger.warning(f"No URL available for article: {article.title[:50]}...")
-        return None
-
-    html_content: str | None = None
-
-    # Strategy 1: Try requests with enhanced headers
-    try:
-        logger.debug(f"Fetching landing page with requests: {url}")
-        response = requests.get(
-            url,
-            headers={
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                ),
-            },
-            timeout=timeout,
-            allow_redirects=True,
-        )
-        response.raise_for_status()
-
-        # Check content type
-        content_type = response.headers.get("content-type", "").lower()
-
-        if "application/pdf" in content_type:
-            logger.debug("URL points to PDF, skipping HTML extraction")
-            return None
-
-        if "text/html" not in content_type:
-            logger.debug(f"Unexpected content type: {content_type}")
-            return None
-
-        html_content = response.text
-        logger.debug(f"Requests succeeded: {len(html_content)} chars")
-
-    except requests.HTTPError as e:
-        # Check if it's a 403 Forbidden - try Selenium fallback
-        if e.response is not None and e.response.status_code == 403:
-            logger.warning(f"Got 403 from {url}, falling back to Selenium")
-        else:
-            logger.debug(f"Requests failed ({e}), trying Selenium")
-
-        # Strategy 2: Fall back to Selenium
-        try:
-            html_content = _fetch_with_selenium(url)
-        except Exception as selenium_error:
-            logger.error(f"Selenium also failed: {selenium_error}")
-            return None
-
-    except requests.RequestException as e:
-        logger.error(f"Failed to fetch landing page {url}: {e}")
-        return None
-
-    # Extract text from HTML
-    if html_content:
-        try:
-            text_content = extract_text_from_html(html_content)
-
-            if text_content:
-                logger.info(
-                    f"Extracted {len(text_content)} chars from landing page "
-                    f"for: {article.title[:50]}..."
-                )
-                return text_content
-            else:
-                logger.warning(f"No text extracted from landing page: {url}")
-                return None
-        except Exception as e:
-            logger.error(f"Error processing landing page {url}: {e}")
-            return None
-
-    return None
+    response = requests.get(url, headers=headers, timeout=timeout, allow_redirects=True)
+    response.raise_for_status()
+    return response.text
 
 
 def extract_text_from_html(html: str) -> str:
@@ -227,6 +131,9 @@ def extract_text_from_html(html: str) -> str:
             ".content",
             "#content",
             ".main-content",
+            ".article-body",
+            ".full-text",
+            "#main-content",
         ]:
             main_content = soup.select_one(selector)
             if main_content:
@@ -249,14 +156,31 @@ def extract_text_from_html(html: str) -> str:
         return ""
 
 
-async def fetch_article_landing_page_async(
-    article: "Article", timeout: int = 30
+def fetch_article_landing_page(
+    article: "Article",
+    timeout: int = 30,
+    use_selenium: bool = True,
 ) -> str | None:
-    """Async version of fetch_article_landing_page."""
+    """Fetch and extract text content from an article's landing page.
+
+    By default uses Selenium to handle JavaScript-heavy publisher sites.
+    Falls back to requests if Selenium fails.
+
+    Args:
+        article: The Article to fetch content for.
+        timeout: Page load timeout in seconds.
+        use_selenium: Whether to use Selenium (default: True).
+
+    Returns:
+        Extracted text content, or None if fetching failed.
+    """
     if not article.open_access:
-        logger.debug(f"Article '{article.title[:50]}...' is not open access")
+        logger.debug(
+            f"Article '{article.title[:50]}...' is not open access, skipping fetch"
+        )
         return None
 
+    # Determine URL to fetch
     url: str | None = None
     if article.url:
         url = str(article.url)
@@ -266,32 +190,98 @@ async def fetch_article_landing_page_async(
         url = str(article.pdf_url)
 
     if not url:
+        logger.warning(f"No URL available for article: {article.title[:50]}...")
         return None
 
-    try:
-        import httpx
+    html_content: str | None = None
 
-        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-            response = await client.get(url)
+    # Strategy 1: Use Selenium (handles JavaScript-heavy sites)
+    if use_selenium:
+        try:
+            logger.debug(f"Fetching landing page with Selenium: {url}")
+            html_content = _fetch_with_selenium(url, timeout)
+            logger.debug(f"Selenium succeeded: {len(html_content)} chars")
+        except Exception as e:
+            logger.warning(f"Selenium failed ({e}), falling back to requests")
+            # Fall back to requests
+            use_selenium = False
+
+    # Strategy 2: Use requests (faster but may not work on all sites)
+    if not use_selenium or html_content is None:
+        try:
+            logger.debug(f"Fetching landing page with requests: {url}")
+            response = requests.get(
+                url,
+                headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                    ),
+                },
+                timeout=timeout,
+                allow_redirects=True,
+            )
             response.raise_for_status()
 
+            # Check content type
             content_type = response.headers.get("content-type", "").lower()
 
             if "application/pdf" in content_type:
+                logger.debug("URL points to PDF, skipping HTML extraction")
                 return None
 
             if "text/html" not in content_type:
+                logger.debug(f"Unexpected content type: {content_type}")
                 return None
 
-            text_content = extract_text_from_html(response.text)
+            html_content = response.text
+            logger.debug(f"Requests succeeded: {len(html_content)} chars")
+
+            # Detect "JavaScript required" pages
+            if len(html_content) < 3000:
+                soup_text = html_content.lower()
+                if "javascript" in soup_text and (
+                    "enable" in soup_text or "required" in soup_text
+                ):
+                    logger.warning(
+                        "Page appears to require JavaScript but Selenium not used"
+                    )
+
+        except requests.RequestException as e:
+            logger.error(f"Failed to fetch landing page {url}: {e}")
+            return None
+
+    # Extract text from HTML
+    if html_content:
+        try:
+            text_content = extract_text_from_html(html_content)
 
             if text_content:
                 logger.info(
-                    f"Extracted {len(text_content)} chars (async) from: {article.title[:50]}..."
+                    f"Extracted {len(text_content)} chars from landing page "
+                    f"for: {article.title[:50]}..."
                 )
                 return text_content
+            else:
+                logger.warning(f"No text extracted from landing page: {url}")
+                return None
+        except Exception as e:
+            logger.error(f"Error processing landing page {url}: {e}")
             return None
 
-    except Exception as e:
-        logger.error(f"Async fetch failed for {url}: {e}")
-        return None
+    return None
+
+
+async def fetch_article_landing_page_async(
+    article: "Article", timeout: int = 30, use_selenium: bool = True
+) -> str | None:
+    """Async version of fetch_article_landing_page.
+
+    Note: Selenium is synchronous, so this will run it in a thread.
+    """
+    import asyncio
+
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        None, fetch_article_landing_page, article, timeout, use_selenium
+    )
