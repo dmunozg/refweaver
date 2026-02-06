@@ -6,6 +6,22 @@ from typing import List, Optional
 from pydantic import BaseModel, Field, HttpUrl
 
 
+class Sentence(BaseModel):
+    """A sentence from a manuscript with reference analysis metadata."""
+
+    text: str = Field(..., description="The sentence text")
+    needs_reference: bool = Field(
+        ...,
+        description="Whether this sentence requires a reference/citation",
+    )
+    reason: str = Field(
+        ...,
+        description="Explanation for why the sentence needs or doesn't need a reference",
+    )
+
+    model_config = {"frozen": True}
+
+
 class Article(BaseModel):
     """Unified article model for all academic search sources."""
 
