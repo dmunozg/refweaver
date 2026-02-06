@@ -79,21 +79,24 @@ class SentenceAnalyzer:
         logger.info(f"Analyzed {len(all_sentences)} sentences total")
         return all_sentences
 
-    def generate_search_keywords(self, sentence: str) -> list[str]:
+    def generate_search_keywords(self, sentence: str | Sentence) -> list[str]:
         """Generate search keywords for finding supporting articles.
 
         Uses LLM to extract key concepts, entities, and technical terms
         from a sentence to construct effective search queries.
 
         Args:
-            sentence: The sentence needing reference support.
+            sentence: The sentence needing reference support (str or Sentence object).
 
         Returns:
             List of search keyword strings optimized for academic search.
         """
+        # Extract text if Sentence object is passed
+        sentence_text = sentence.text if isinstance(sentence, Sentence) else sentence
+
         prompt = f"""Generate 3-5 search keyword phrases to find academic articles that support this claim.
 
-Sentence: {sentence}
+Sentence: {sentence_text}
 
 Instructions:
 1. Extract key concepts, technical terms, and named entities
@@ -110,7 +113,7 @@ protein denaturation temperature resistance
 Keywords:"""
 
         try:
-            logger.debug(f"Generating keywords for: {sentence[:60]}...")
+            logger.debug(f"Generating keywords for: {sentence_text[:60]}...")
 
             response = self.llm.client.chat.completions.create(
                 model=self.llm.model,
@@ -131,7 +134,7 @@ Keywords:"""
             result = response.choices[0].message.content
             if not result:
                 logger.warning("LLM returned empty keywords, using fallback")
-                return [sentence[:100]]
+                return [sentence_text[:100]]
 
             # Parse keywords from response
             keywords = [
@@ -142,18 +145,18 @@ Keywords:"""
 
             if not keywords:
                 logger.warning("No keywords extracted, using fallback")
-                return [sentence[:100]]
+                return [sentence_text[:100]]
 
             logger.info(f"Generated {len(keywords)} keywords: {keywords}")
             return keywords
 
         except Exception as e:
             logger.error(f"Keyword generation failed: {e}")
-            return [sentence[:100]]  # Fallback to truncated sentence
+            return [sentence_text[:100]]  # Fallback to truncated sentence
 
     def evaluate_article_relevance(
         self,
-        sentence: str,
+        sentence: str | Sentence,
         article: Article,
     ) -> dict[str, bool | str | float]:
         """Evaluate if an article is relevant to support a sentence.
@@ -162,19 +165,22 @@ Keywords:"""
         title and abstract to determine relevance.
 
         Args:
-            sentence: The claim needing support.
+            sentence: The claim needing support (str or Sentence object).
             article: The candidate article to evaluate.
 
         Returns:
             Dict with 'relevant' (bool), 'confidence' (float 0-1),
             and 'reasoning' (str) explaining the decision.
         """
+        # Extract text if Sentence object is passed
+        sentence_text = sentence.text if isinstance(sentence, Sentence) else sentence
+
         abstract = article.abstract or "[Abstract not available]"
 
         prompt = f"""Evaluate if this article supports the following claim.
 
 CLAIM TO SUPPORT:
-{sentence}
+{sentence_text}
 
 ARTICLE:
 Title: {article.title}

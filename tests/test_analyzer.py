@@ -206,6 +206,30 @@ class TestGenerateSearchKeywords:
         assert messages[0]["role"] == "system"
         assert "academic search" in messages[0]["content"].lower()
 
+    def test_generate_keywords_accepts_sentence_object(self):
+        """Test that generate_search_keywords accepts Sentence object."""
+        mock_llm = MagicMock()
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = "enzyme nanoparticle hybrid"
+        mock_llm.client.chat.completions.create.return_value = mock_response
+
+        analyzer = SentenceAnalyzer(llm_client=mock_llm)
+        sentence_obj = Sentence(
+            text="Gold nanoparticles stabilize enzymes effectively.",
+            needs_reference=True,
+            reason="Specific claim about enzyme stabilization",
+        )
+        result = analyzer.generate_search_keywords(sentence_obj)
+
+        assert len(result) == 1
+        assert result[0] == "enzyme nanoparticle hybrid"
+
+        # Verify the prompt contains the sentence text
+        call_args = mock_llm.client.chat.completions.create.call_args
+        prompt = call_args[1]["messages"][1]["content"]
+        assert "Gold nanoparticles stabilize enzymes effectively." in prompt
+
 
 class TestEvaluateArticleRelevance:
     """Test suite for article relevance evaluation."""
@@ -381,3 +405,39 @@ class TestEvaluateArticleRelevance:
         call_args = mock_llm.client.chat.completions.create.call_args
         prompt = call_args[1]["messages"][1]["content"]
         assert "[Abstract not available]" in prompt
+
+    def test_evaluate_relevance_accepts_sentence_object(self):
+        """Test that evaluate_article_relevance accepts Sentence object."""
+        mock_llm = MagicMock()
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = (
+            "RELEVANT: YES\n"
+            "CONFIDENCE: 0.80\n"
+            "REASONING: Directly supports the claim."
+        )
+        mock_llm.client.chat.completions.create.return_value = mock_response
+
+        analyzer = SentenceAnalyzer(llm_client=mock_llm)
+        sentence_obj = Sentence(
+            text="Gold nanoparticles show 90% enzyme stabilization at high temperatures.",
+            needs_reference=True,
+            reason="Specific statistic needing citation",
+        )
+        article = Article(
+            source="test",
+            external_id="support123",
+            title="Supporting Article",
+            authors=["Researcher"],
+            abstract="Shows enzyme stabilization data.",
+        )
+
+        result = analyzer.evaluate_article_relevance(sentence_obj, article)
+
+        assert result["relevant"] is True
+        assert result["confidence"] == 0.80
+
+        # Verify the prompt contains the sentence text
+        call_args = mock_llm.client.chat.completions.create.call_args
+        prompt = call_args[1]["messages"][1]["content"]
+        assert "Gold nanoparticles show 90% enzyme stabilization" in prompt
