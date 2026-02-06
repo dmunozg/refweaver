@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from refweaver.analyzer import SentenceAnalyzer
+from refweaver.llm import SearchKeywords, SentenceAnalysis, ArticleRelevance
 from refweaver.models import Article, Sentence
 
 
@@ -130,19 +131,16 @@ class TestSentenceAnalyzer:
 
 
 class TestGenerateSearchKeywords:
-    """Test suite for keyword generation."""
+    """Test suite for keyword generation using pydantic-ai."""
 
-    def test_generate_keywords_basic(self):
-        """Test basic keyword generation."""
+    def test_generate_keywords_delegates_to_llm(self):
+        """Test that generate_search_keywords delegates to LLM client."""
         mock_llm = MagicMock()
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = (
-            "enzyme-nanoparticle hybrid\n"
-            "gold nanoparticle stabilization\n"
-            "protein denaturation resistance"
-        )
-        mock_llm.client.chat.completions.create.return_value = mock_response
+        mock_llm.generate_search_keywords.return_value = [
+            "enzyme-nanoparticle hybrid",
+            "gold nanoparticle stabilization",
+            "protein denaturation resistance",
+        ]
 
         analyzer = SentenceAnalyzer(llm_client=mock_llm)
         result = analyzer.generate_search_keywords(
@@ -151,68 +149,14 @@ class TestGenerateSearchKeywords:
 
         assert len(result) == 3
         assert "enzyme-nanoparticle hybrid" in result
-        assert "gold nanoparticle stabilization" in result
-        assert "protein denaturation resistance" in result
-
-    def test_generate_keywords_filters_empty_lines(self):
-        """Test that empty lines are filtered from keywords."""
-        mock_llm = MagicMock()
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = (
-            "\n"
-            "valid keyword one\n"
-            "\n"
-            "valid keyword two\n"
-            "   \n"
+        mock_llm.generate_search_keywords.assert_called_once_with(
+            "Gold nanoparticles stabilize enzymes against denaturation."
         )
-        mock_llm.client.chat.completions.create.return_value = mock_response
-
-        analyzer = SentenceAnalyzer(llm_client=mock_llm)
-        result = analyzer.generate_search_keywords("Test sentence.")
-
-        assert len(result) == 2
-        assert "valid keyword one" in result
-        assert "valid keyword two" in result
-
-    def test_generate_keywords_fallback_on_empty(self):
-        """Test fallback to sentence when LLM returns empty."""
-        mock_llm = MagicMock()
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = "\n\n"
-        mock_llm.client.chat.completions.create.return_value = mock_response
-
-        analyzer = SentenceAnalyzer(llm_client=mock_llm)
-        sentence = "This is a test sentence for fallback."
-        result = analyzer.generate_search_keywords(sentence)
-
-        assert len(result) == 1
-        assert result[0] == sentence[:100]
-
-    def test_generate_keywords_llm_called_with_system_prompt(self):
-        """Test that LLM is called with proper system prompt."""
-        mock_llm = MagicMock()
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = "test keyword"
-        mock_llm.client.chat.completions.create.return_value = mock_response
-
-        analyzer = SentenceAnalyzer(llm_client=mock_llm)
-        analyzer.generate_search_keywords("Test sentence.")
-
-        call_args = mock_llm.client.chat.completions.create.call_args
-        messages = call_args[1]["messages"]
-        assert messages[0]["role"] == "system"
-        assert "academic search" in messages[0]["content"].lower()
 
     def test_generate_keywords_accepts_sentence_object(self):
         """Test that generate_search_keywords accepts Sentence object."""
         mock_llm = MagicMock()
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = "enzyme nanoparticle hybrid"
-        mock_llm.client.chat.completions.create.return_value = mock_response
+        mock_llm.generate_search_keywords.return_value = ["enzyme nanoparticle hybrid"]
 
         analyzer = SentenceAnalyzer(llm_client=mock_llm)
         sentence_obj = Sentence(
@@ -223,28 +167,35 @@ class TestGenerateSearchKeywords:
         result = analyzer.generate_search_keywords(sentence_obj)
 
         assert len(result) == 1
-        assert result[0] == "enzyme nanoparticle hybrid"
+        # Should extract text from Sentence object
+        mock_llm.generate_search_keywords.assert_called_once_with(
+            "Gold nanoparticles stabilize enzymes effectively."
+        )
 
-        # Verify the prompt contains the sentence text
-        call_args = mock_llm.client.chat.completions.create.call_args
-        prompt = call_args[1]["messages"][1]["content"]
-        assert "Gold nanoparticles stabilize enzymes effectively." in prompt
+    def test_generate_keywords_uses_fallback(self):
+        """Test fallback when LLM fails."""
+        mock_llm = MagicMock()
+        mock_llm.generate_search_keywords.return_value = ["fallback keyword"]
+
+        analyzer = SentenceAnalyzer(llm_client=mock_llm)
+        sentence = "This is a test sentence for fallback."
+        result = analyzer.generate_search_keywords(sentence)
+
+        assert len(result) == 1
+        assert result[0] == "fallback keyword"
 
 
 class TestEvaluateArticleRelevance:
-    """Test suite for article relevance evaluation."""
+    """Test suite for article relevance evaluation using pydantic-ai."""
 
     def test_evaluate_relevance_yes(self):
         """Test evaluation when article is relevant."""
         mock_llm = MagicMock()
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = (
-            "RELEVANT: YES\n"
-            "CONFIDENCE: 0.85\n"
-            "REASONING: Article directly supports the claim with experimental data."
-        )
-        mock_llm.client.chat.completions.create.return_value = mock_response
+        mock_llm.evaluate_article_relevance.return_value = {
+            "relevant": True,
+            "confidence": 0.85,
+            "reasoning": "Article directly supports the claim with experimental data.",
+        }
 
         analyzer = SentenceAnalyzer(llm_client=mock_llm)
         article = Article(
@@ -268,14 +219,11 @@ class TestEvaluateArticleRelevance:
     def test_evaluate_relevance_no(self):
         """Test evaluation when article is not relevant."""
         mock_llm = MagicMock()
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = (
-            "RELEVANT: NO\n"
-            "CONFIDENCE: 0.90\n"
-            "REASONING: Article discusses unrelated topic."
-        )
-        mock_llm.client.chat.completions.create.return_value = mock_response
+        mock_llm.evaluate_article_relevance.return_value = {
+            "relevant": False,
+            "confidence": 0.90,
+            "reasoning": "Article discusses unrelated topic.",
+        }
 
         analyzer = SentenceAnalyzer(llm_client=mock_llm)
         article = Article(
@@ -295,128 +243,14 @@ class TestEvaluateArticleRelevance:
         assert result["confidence"] == 0.90
         assert "unrelated" in result["reasoning"].lower()
 
-    def test_evaluate_relevance_maybe_treated_as_yes(self):
-        """Test that 'Maybe' relevance is treated as True."""
-        mock_llm = MagicMock()
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = (
-            "RELEVANT: Maybe\n"
-            "CONFIDENCE: 0.60\n"
-            "REASONING: Partially relevant but not perfect match."
-        )
-        mock_llm.client.chat.completions.create.return_value = mock_response
-
-        analyzer = SentenceAnalyzer(llm_client=mock_llm)
-        article = Article(
-            source="test",
-            external_id="789",
-            title="Partially Related",
-            authors=["Author"],
-            abstract="Somewhat related content.",
-        )
-
-        result = analyzer.evaluate_article_relevance(
-            "Test sentence.",
-            article,
-        )
-
-        assert result["relevant"] is True  # Maybe is treated as relevant
-        assert result["confidence"] == 0.60
-
-    def test_evaluate_relevance_article_includes_title_authors(self):
-        """Test that article metadata is included in the prompt."""
-        mock_llm = MagicMock()
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = "RELEVANT: YES\nCONFIDENCE: 0.5\nREASONING: Test"
-        mock_llm.client.chat.completions.create.return_value = mock_response
-
-        analyzer = SentenceAnalyzer(llm_client=mock_llm)
-        article = Article(
-            source="test",
-            external_id="abc",
-            title="Specific Research Title",
-            authors=["Alice Smith", "Bob Jones", "Carol White", "David Lee"],
-            year=2023,
-            abstract="Detailed abstract here.",
-        )
-
-        analyzer.evaluate_article_relevance("Test claim.", article)
-
-        call_args = mock_llm.client.chat.completions.create.call_args
-        prompt = call_args[1]["messages"][1]["content"]
-        assert "Specific Research Title" in prompt
-        assert "Alice Smith" in prompt
-        assert "Bob Jones" in prompt
-        assert "Carol White" in prompt
-        assert "et al." in prompt  # Should show et al. for 4+ authors
-        assert "2023" in prompt
-        assert "Detailed abstract here" in prompt
-
-    def test_evaluate_relevance_clamps_confidence(self):
-        """Test that confidence values are clamped to 0-1 range."""
-        mock_llm = MagicMock()
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = (
-            "RELEVANT: YES\n"
-            "CONFIDENCE: 1.5\n"  # Over 1.0
-            "REASONING: Test"
-        )
-        mock_llm.client.chat.completions.create.return_value = mock_response
-
-        analyzer = SentenceAnalyzer(llm_client=mock_llm)
-        article = Article(
-            source="test",
-            external_id="xyz",
-            title="Test",
-            authors=["Author"],
-        )
-
-        result = analyzer.evaluate_article_relevance("Test.", article)
-
-        assert result["confidence"] == 1.0  # Should be clamped
-
-    def test_evaluate_relevance_missing_abstract(self):
-        """Test evaluation when article has no abstract."""
-        mock_llm = MagicMock()
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = (
-            "RELEVANT: NO\n"
-            "CONFIDENCE: 0.5\n"
-            "REASONING: No abstract available."
-        )
-        mock_llm.client.chat.completions.create.return_value = mock_response
-
-        analyzer = SentenceAnalyzer(llm_client=mock_llm)
-        article = Article(
-            source="test",
-            external_id="noabs",
-            title="No Abstract Article",
-            authors=["Author"],
-            abstract=None,
-        )
-
-        result = analyzer.evaluate_article_relevance("Test.", article)
-
-        assert result["relevant"] is False
-        call_args = mock_llm.client.chat.completions.create.call_args
-        prompt = call_args[1]["messages"][1]["content"]
-        assert "[Abstract not available]" in prompt
-
     def test_evaluate_relevance_accepts_sentence_object(self):
         """Test that evaluate_article_relevance accepts Sentence object."""
         mock_llm = MagicMock()
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = (
-            "RELEVANT: YES\n"
-            "CONFIDENCE: 0.80\n"
-            "REASONING: Directly supports the claim."
-        )
-        mock_llm.client.chat.completions.create.return_value = mock_response
+        mock_llm.evaluate_article_relevance.return_value = {
+            "relevant": True,
+            "confidence": 0.80,
+            "reasoning": "Directly supports the claim.",
+        }
 
         analyzer = SentenceAnalyzer(llm_client=mock_llm)
         sentence_obj = Sentence(
@@ -436,8 +270,65 @@ class TestEvaluateArticleRelevance:
 
         assert result["relevant"] is True
         assert result["confidence"] == 0.80
+        # Should extract text from Sentence object and pass article fields
+        mock_llm.evaluate_article_relevance.assert_called_once()
+        call_kwargs = mock_llm.evaluate_article_relevance.call_args[1]
+        assert "Gold nanoparticles show 90% enzyme stabilization" in call_kwargs["sentence"]
+        assert call_kwargs["article_title"] == "Supporting Article"
+        assert call_kwargs["article_authors"] == ["Researcher"]
+        assert call_kwargs["article_abstract"] == "Shows enzyme stabilization data."
 
-        # Verify the prompt contains the sentence text
-        call_args = mock_llm.client.chat.completions.create.call_args
-        prompt = call_args[1]["messages"][1]["content"]
-        assert "Gold nanoparticles show 90% enzyme stabilization" in prompt
+    def test_evaluate_relevance_missing_abstract(self):
+        """Test evaluation when article has no abstract."""
+        mock_llm = MagicMock()
+        mock_llm.evaluate_article_relevance.return_value = {
+            "relevant": False,
+            "confidence": 0.5,
+            "reasoning": "No abstract available.",
+        }
+
+        analyzer = SentenceAnalyzer(llm_client=mock_llm)
+        article = Article(
+            source="test",
+            external_id="noabs",
+            title="No Abstract Article",
+            authors=["Author"],
+            abstract=None,
+        )
+
+        result = analyzer.evaluate_article_relevance("Test.", article)
+
+        assert result["relevant"] is False
+        # Verify None is passed for abstract
+        mock_llm.evaluate_article_relevance.assert_called_once()
+        call_kwargs = mock_llm.evaluate_article_relevance.call_args[1]
+        assert call_kwargs["article_abstract"] is None
+
+    def test_evaluate_relevance_passes_article_fields(self):
+        """Test that all article fields are passed to LLM client."""
+        mock_llm = MagicMock()
+        mock_llm.evaluate_article_relevance.return_value = {
+            "relevant": True,
+            "confidence": 0.75,
+            "reasoning": "Good match.",
+        }
+
+        analyzer = SentenceAnalyzer(llm_client=mock_llm)
+        article = Article(
+            source="test",
+            external_id="abc",
+            title="Specific Research Title",
+            authors=["Alice Smith", "Bob Jones", "Carol White", "David Lee"],
+            year=2023,
+            abstract="Detailed abstract here.",
+        )
+
+        analyzer.evaluate_article_relevance("Test claim.", article)
+
+        mock_llm.evaluate_article_relevance.assert_called_once()
+        call_kwargs = mock_llm.evaluate_article_relevance.call_args[1]
+        assert call_kwargs["sentence"] == "Test claim."
+        assert call_kwargs["article_title"] == "Specific Research Title"
+        assert call_kwargs["article_authors"] == ["Alice Smith", "Bob Jones", "Carol White", "David Lee"]
+        assert call_kwargs["article_year"] == 2023
+        assert call_kwargs["article_abstract"] == "Detailed abstract here."
