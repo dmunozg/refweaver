@@ -7,6 +7,7 @@ from loguru import logger
 from refweaver.adapters.openalex import OpenAlexAdapter
 from refweaver.adapters.scholarly import GoogleScholarAdapter
 from refweaver.adapters.semantic_scholar import SemanticScholarAdapter
+from refweaver.llm import LLMClient, LLMConfig
 from refweaver.models import Article
 
 
@@ -24,7 +25,7 @@ class ArticleEnricher:
         semantic_scholar_api_key: Optional[str] = None,
         openalex_email: Optional[str] = None,
         use_llm_extractor: bool = False,
-        llm_model: Optional[str] = None,
+        llm_config: Optional[LLMConfig] = None,
     ) -> None:
         """Initialize the enricher with all adapters.
 
@@ -32,7 +33,7 @@ class ArticleEnricher:
             semantic_scholar_api_key: API key for Semantic Scholar.
             openalex_email: Email for OpenAlex (recommended).
             use_llm_extractor: Whether to enable LLM-based web extraction.
-            llm_model: Local LLM model name/path for extraction (e.g., "Qwen3-30B").
+            llm_config: LLM configuration. If None, uses environment defaults.
         """
         self.semantic_scholar: SemanticScholarAdapter = SemanticScholarAdapter(
             api_key=semantic_scholar_api_key
@@ -41,10 +42,11 @@ class ArticleEnricher:
         self.google_scholar: GoogleScholarAdapter = GoogleScholarAdapter()
 
         self.use_llm_extractor = use_llm_extractor
-        self.llm_model = llm_model
+        self.llm_client: Optional[LLMClient] = None
 
         if use_llm_extractor:
-            logger.info(f"ArticleEnricher initialized with LLM extraction ({llm_model})")
+            self.llm_client = LLMClient(config=llm_config)
+            logger.info(f"ArticleEnricher initialized with LLM extraction ({self.llm_client.model})")
         else:
             logger.info("ArticleEnricher initialized (API methods only)")
 
@@ -305,22 +307,21 @@ class ArticleEnricher:
                 f"(sources: {len(html_sources)}, total length: {len(combined_text)} chars)"
             )
 
-            # TODO: Implement actual LLM call with pydantic-ai
-            # The LLM should:
-            # 1. Look at both sources
-            # 2. Extract the abstract text
-            # 3. Return clean abstract or None if not found
-            #
-            # Example prompt structure:
-            # "Extract the abstract from the following web page content.
-            #  Look for sections labeled 'Abstract', 'Summary', etc.
-            #  Return only the abstract text, or 'NO_ABSTRACT_FOUND' if not present.
-            #  
-            #  Content:
-            #  {combined_text}"
+            # Use LLM to extract abstract
+            if self.llm_client is None:
+                logger.error("LLM client not initialized")
+                return article
 
-            # Placeholder - return unchanged
-            # Actual implementation would use pydantic-ai here
+            abstract = self.llm_client.extract_abstract_from_html(
+                html_content=combined_text,
+                article_title=article.title,
+            )
+
+            if abstract:
+                logger.success(f"LLM extracted abstract ({len(abstract)} chars)")
+                return article.model_copy(update={"abstract": abstract})
+
+            logger.warning(f"LLM could not extract abstract for: {article.title[:50]}...")
             return article
 
         except Exception as e:
