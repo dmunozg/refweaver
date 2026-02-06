@@ -80,13 +80,26 @@ class TestOutputModels:
     def test_article_relevance_model(self):
         """Test ArticleRelevance output model."""
         relevance = ArticleRelevance(
-            relevant=True,
+            verdict="SUPPORTS",
             confidence=0.85,
             reasoning="Directly supports the claim with experimental evidence",
         )
-        assert relevance.relevant is True
+        assert relevance.verdict == "SUPPORTS"
         assert relevance.confidence == 0.85
         assert 0.0 <= relevance.confidence <= 1.0
+        assert relevance.suggested_modification is None
+
+    def test_article_relevance_with_modification(self):
+        """Test ArticleRelevance with suggested modification."""
+        relevance = ArticleRelevance(
+            verdict="PARTIALLY_SUPPORTS",
+            confidence=0.70,
+            reasoning="The article supports the claim but only at lower temperatures.",
+            suggested_modification="Gold nanoparticles stabilize enzymes at temperatures below 40°C.",
+        )
+        assert relevance.verdict == "PARTIALLY_SUPPORTS"
+        assert relevance.suggested_modification is not None
+        assert "below 40°C" in relevance.suggested_modification
 
     def test_extracted_abstract_model(self):
         """Test ExtractedAbstract output model."""
@@ -102,7 +115,7 @@ class TestOutputModels:
         # Should raise validation error for out-of-range confidence
         with pytest.raises(ValueError):  # pydantic.ValidationError
             ArticleRelevance(
-                relevant=True,
+                verdict="SUPPORTS",
                 confidence=1.5,  # Out of range
                 reasoning="Test",
             )

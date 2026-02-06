@@ -187,13 +187,14 @@ class TestGenerateSearchKeywords:
 class TestEvaluateArticleRelevance:
     """Test suite for article relevance evaluation using pydantic-ai."""
 
-    def test_evaluate_relevance_yes(self):
-        """Test evaluation when article is relevant."""
+    def test_evaluate_relevance_supports(self):
+        """Test evaluation when article supports the claim."""
         mock_llm = MagicMock()
         mock_llm.evaluate_article_relevance.return_value = {
-            "relevant": True,
+            "verdict": "SUPPORTS",
             "confidence": 0.85,
             "reasoning": "Article directly supports the claim with experimental data.",
+            "suggested_modification": None,
         }
 
         analyzer = SentenceAnalyzer(llm_client=mock_llm)
@@ -211,44 +212,75 @@ class TestEvaluateArticleRelevance:
             article,
         )
 
-        assert result["relevant"] is True
+        assert result["verdict"] == "SUPPORTS"
         assert result["confidence"] == 0.85
         assert "experimental data" in result["reasoning"]
+        assert result["suggested_modification"] is None
 
-    def test_evaluate_relevance_no(self):
-        """Test evaluation when article is not relevant."""
+    def test_evaluate_relevance_contradicts(self):
+        """Test evaluation when article contradicts the claim."""
         mock_llm = MagicMock()
         mock_llm.evaluate_article_relevance.return_value = {
-            "relevant": False,
+            "verdict": "CONTRADICTS",
             "confidence": 0.90,
-            "reasoning": "Article discusses unrelated topic.",
+            "reasoning": "Article shows enzyme denaturation with nanoparticles.",
+            "suggested_modification": "Gold nanoparticles may destabilize enzymes under certain conditions.",
         }
 
         analyzer = SentenceAnalyzer(llm_client=mock_llm)
         article = Article(
             source="test",
             external_id="456",
-            title="Unrelated Article",
+            title="Contradictory Article",
             authors=["Author"],
-            abstract="Different topic entirely.",
+            abstract="Shows opposite results.",
         )
 
         result = analyzer.evaluate_article_relevance(
-            "Climate change affects glaciers.",
+            "Gold nanoparticles stabilize enzymes.",
             article,
         )
 
-        assert result["relevant"] is False
+        assert result["verdict"] == "CONTRADICTS"
         assert result["confidence"] == 0.90
-        assert "unrelated" in result["reasoning"].lower()
+        assert "destabilize" in result["suggested_modification"]
+
+    def test_evaluate_relevance_partially_supports(self):
+        """Test evaluation when article partially supports the claim."""
+        mock_llm = MagicMock()
+        mock_llm.evaluate_article_relevance.return_value = {
+            "verdict": "PARTIALLY_SUPPORTS",
+            "confidence": 0.75,
+            "reasoning": "Supports claim but only at specific temperatures.",
+            "suggested_modification": "Gold nanoparticles stabilize enzymes at temperatures below 50°C.",
+        }
+
+        analyzer = SentenceAnalyzer(llm_client=mock_llm)
+        article = Article(
+            source="test",
+            external_id="789",
+            title="Partial Support Article",
+            authors=["Author"],
+            abstract="Conditional results.",
+        )
+
+        result = analyzer.evaluate_article_relevance(
+            "Gold nanoparticles stabilize enzymes.",
+            article,
+        )
+
+        assert result["verdict"] == "PARTIALLY_SUPPORTS"
+        assert result["confidence"] == 0.75
+        assert "below 50°C" in result["suggested_modification"]
 
     def test_evaluate_relevance_accepts_sentence_object(self):
         """Test that evaluate_article_relevance accepts Sentence object."""
         mock_llm = MagicMock()
         mock_llm.evaluate_article_relevance.return_value = {
-            "relevant": True,
+            "verdict": "SUPPORTS",
             "confidence": 0.80,
             "reasoning": "Directly supports the claim.",
+            "suggested_modification": None,
         }
 
         analyzer = SentenceAnalyzer(llm_client=mock_llm)
@@ -267,8 +299,9 @@ class TestEvaluateArticleRelevance:
 
         result = analyzer.evaluate_article_relevance(sentence_obj, article)
 
-        assert result["relevant"] is True
+        assert result["verdict"] == "SUPPORTS"
         assert result["confidence"] == 0.80
+        assert result["suggested_modification"] is None
         # Should extract text from Sentence object and pass article fields
         mock_llm.evaluate_article_relevance.assert_called_once()
         call_kwargs = mock_llm.evaluate_article_relevance.call_args[1]
@@ -281,9 +314,10 @@ class TestEvaluateArticleRelevance:
         """Test evaluation when article has no abstract."""
         mock_llm = MagicMock()
         mock_llm.evaluate_article_relevance.return_value = {
-            "relevant": False,
-            "confidence": 0.5,
+            "verdict": "INSUFFICIENT_INFO",
+            "confidence": 0.0,
             "reasoning": "No abstract available.",
+            "suggested_modification": None,
         }
 
         analyzer = SentenceAnalyzer(llm_client=mock_llm)
@@ -297,7 +331,7 @@ class TestEvaluateArticleRelevance:
 
         result = analyzer.evaluate_article_relevance("Test.", article)
 
-        assert result["relevant"] is False
+        assert result["verdict"] == "INSUFFICIENT_INFO"
         # Verify None is passed for abstract
         mock_llm.evaluate_article_relevance.assert_called_once()
         call_kwargs = mock_llm.evaluate_article_relevance.call_args[1]
@@ -307,9 +341,10 @@ class TestEvaluateArticleRelevance:
         """Test that all article fields are passed to LLM client."""
         mock_llm = MagicMock()
         mock_llm.evaluate_article_relevance.return_value = {
-            "relevant": True,
+            "verdict": "SUPPORTS",
             "confidence": 0.75,
             "reasoning": "Good match.",
+            "suggested_modification": None,
         }
 
         analyzer = SentenceAnalyzer(llm_client=mock_llm)

@@ -106,24 +106,23 @@ class SentenceAnalyzer:
         self,
         sentence: str | Sentence,
         article: Article,
-    ) -> dict[str, bool | str | float]:
-        """Evaluate if an article is relevant to support a sentence.
+    ) -> dict[str, str | float | None]:
+        """Evaluate if an article is relevant to support a sentence (abstract only).
 
-        Uses LLM with structured output to compare the sentence's claim
-        against the article's metadata to determine relevance.
+        First-pass evaluation using abstract. Returns a verdict on how the
+        article relates to the claim.
 
         Args:
             sentence: The claim needing support (str or Sentence object).
             article: The candidate article to evaluate.
 
         Returns:
-            Dict with 'relevant' (bool), 'confidence' (float 0-1),
-            and 'reasoning' (str) explaining the decision.
+            Dict with 'verdict' (str: SUPPORTS/CONTRADICTS/PARTIALLY_SUPPORTS/
+            INSUFFICIENT_INFO/NOT_RELEVANT), 'confidence' (float), 'reasoning' (str),
+            and 'suggested_modification' (str | None).
         """
-        # Extract text if Sentence object is passed
         sentence_text = sentence.text if isinstance(sentence, Sentence) else sentence
 
-        # Delegate to LLM client which uses pydantic-ai structured output
         return self.llm.evaluate_article_relevance(
             sentence=sentence_text,
             article_title=article.title,
@@ -136,8 +135,8 @@ class SentenceAnalyzer:
         self,
         sentence: str | Sentence,
         article: Article,
-    ) -> dict[str, bool | str | float]:
-        """Async version of evaluate_article_relevance."""
+    ) -> dict[str, str | float | None]:
+        """Async version of evaluate_article_relevance (abstract only)."""
         sentence_text = sentence.text if isinstance(sentence, Sentence) else sentence
 
         return await self.llm.evaluate_article_relevance_async(
@@ -146,4 +145,49 @@ class SentenceAnalyzer:
             article_authors=article.authors,
             article_year=article.year,
             article_abstract=article.abstract,
+        )
+
+    def evaluate_article_relevance_fulltext(
+        self,
+        sentence: str | Sentence,
+        article: Article,
+        fulltext_content: str,
+    ) -> dict[str, str | float | None]:
+        """Evaluate article relevance using full text (e.g., from PDF).
+
+        This provides a more thorough evaluation when the full PDF is available.
+
+        Args:
+            sentence: The claim needing support.
+            article: The candidate article to evaluate.
+            fulltext_content: Extracted text from the PDF.
+
+        Returns:
+            Dict with 'verdict', 'confidence', 'reasoning', 'suggested_modification'.
+        """
+        sentence_text = sentence.text if isinstance(sentence, Sentence) else sentence
+
+        return self.llm.evaluate_article_relevance_fulltext(
+            sentence=sentence_text,
+            article_title=article.title,
+            article_authors=article.authors,
+            article_year=article.year,
+            fulltext_content=fulltext_content,
+        )
+
+    async def evaluate_article_relevance_fulltext_async(
+        self,
+        sentence: str | Sentence,
+        article: Article,
+        fulltext_content: str,
+    ) -> dict[str, str | float | None]:
+        """Async version of evaluate_article_relevance_fulltext."""
+        sentence_text = sentence.text if isinstance(sentence, Sentence) else sentence
+
+        return await self.llm.evaluate_article_relevance_fulltext_async(
+            sentence=sentence_text,
+            article_title=article.title,
+            article_authors=article.authors,
+            article_year=article.year,
+            fulltext_content=fulltext_content,
         )

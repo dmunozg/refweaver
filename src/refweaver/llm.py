@@ -105,9 +105,17 @@ class SentenceAnalysis(BaseModel):
 class ArticleRelevance(BaseModel):
     """Structured output for article relevance evaluation."""
 
-    relevant: bool = Field(
+    verdict: str = Field(
         ...,
-        description="Whether the article supports the claim",
+        description=(
+            "Assessment of how the article relates to the claim: "
+            "SUPPORTS (evidence clearly backs the claim), "
+            "CONTRADICTS (evidence contradicts the claim), "
+            "PARTIALLY_SUPPORTS (related but nuanced/conditional), "
+            "INSUFFICIENT_INFO (cannot determine from available text), "
+            "or NOT_RELEVANT (off-topic)"
+        ),
+        pattern=r"^(SUPPORTS|CONTRADICTS|PARTIALLY_SUPPORTS|INSUFFICIENT_INFO|NOT_RELEVANT)$",
     )
     confidence: float = Field(
         ...,
@@ -117,7 +125,14 @@ class ArticleRelevance(BaseModel):
     )
     reasoning: str = Field(
         ...,
-        description="Explanation of why the article does or doesn't support the claim",
+        description="Explanation of the assessment with specific evidence from the text",
+    )
+    suggested_modification: str | None = Field(
+        None,
+        description=(
+            "If the article suggests a modification to the original claim, "
+            "provide the revised wording here. Null if no modification needed."
+        ),
     )
 
 
@@ -345,8 +360,11 @@ Guidelines for sentences that DON'T need references:
         article_authors: list[str],
         article_year: int | None,
         article_abstract: str | None,
-    ) -> dict[str, bool | str | float]:
-        """Evaluate if an article is relevant to support a sentence.
+    ) -> dict[str, str | float | None]:
+        """Evaluate if an article is relevant to support a sentence (abstract only).
+
+        This is the first-pass evaluation using only the abstract.
+        For a full-text evaluation, use evaluate_article_relevance_fulltext().
 
         Args:
             sentence: The claim needing support.
@@ -356,8 +374,8 @@ Guidelines for sentences that DON'T need references:
             article_abstract: Article abstract (optional).
 
         Returns:
-            Dict with 'relevant' (bool), 'confidence' (float 0-1),
-            and 'reasoning' (str).
+            Dict with 'verdict' (str), 'confidence' (float 0-1),
+            'reasoning' (str), and 'suggested_modification' (str | None).
         """
         abstract = article_abstract or "[Abstract not available]"
         authors_str = ", ".join(article_authors[:3])
@@ -365,7 +383,7 @@ Guidelines for sentences that DON'T need references:
             authors_str += ", et al."
         year_str = str(article_year) if article_year else "Unknown"
 
-        prompt = f"""Evaluate if this article supports the following claim.
+        prompt = f"""Evaluate how this article relates to the following claim.
 
 CLAIM TO SUPPORT:
 {sentence}
@@ -377,38 +395,46 @@ Year: {year_str}
 Abstract: {abstract[:1500]}
 
 INSTRUCTIONS:
-Determine if this article provides evidence that DIRECTLY SUPPORTS the claim.
-The article doesn't need to say exactly the same thing, but should provide
-supporting evidence, data, or establish the foundation for the claim."""
+Based on the abstract, assess how this article relates to the claim:
+- SUPPORTS: Evidence clearly backs the claim
+- CONTRADICTS: Evidence contradicts the claim
+- PARTIALLY_SUPPORTS: Related but nuanced/conditional
+- INSUFFICIENT_INFO: Cannot determine from abstract alone
+- NOT_RELEVANT: Off-topic
+
+If the article suggests a modification to the original claim, provide the revised wording."""
 
         agent = Agent(
             model=self._get_model(),
             system_prompt=(
-                "You are an expert scientific reviewer evaluating if research articles "
-                "support specific claims from manuscript introductions."
+                "You are an expert scientific reviewer evaluating research articles. "
+                "Assess whether articles support, contradict, or relate to specific claims. "
+                "Be precise and cite specific evidence from the text."
             ),
             output_type=ArticleRelevance,
             output_retries=3,
         )
 
         try:
-            logger.debug(f"Evaluating article '{article_title[:50]}...' for relevance")
+            logger.debug(f"Evaluating article '{article_title[:50]}...' from abstract")
             response = agent.run_sync(prompt)
             result = response.output
             logger.info(
-                f"Article relevance: relevant={result.relevant}, confidence={result.confidence:.2f}"
+                f"Article evaluation: verdict={result.verdict}, confidence={result.confidence:.2f}"
             )
             return {
-                "relevant": result.relevant,
+                "verdict": result.verdict,
                 "confidence": result.confidence,
                 "reasoning": result.reasoning,
+                "suggested_modification": result.suggested_modification,
             }
         except Exception as e:
-            logger.error(f"Article relevance evaluation failed: {e}")
+            logger.error(f"Article evaluation failed: {e}")
             return {
-                "relevant": False,
+                "verdict": "INSUFFICIENT_INFO",
                 "confidence": 0.0,
-                "reasoning": f"Error: {e}",
+                "reasoning": f"Error during evaluation: {e}",
+                "suggested_modification": None,
             }
 
     async def evaluate_article_relevance_async(
@@ -418,15 +444,15 @@ supporting evidence, data, or establish the foundation for the claim."""
         article_authors: list[str],
         article_year: int | None,
         article_abstract: str | None,
-    ) -> dict[str, bool | str | float]:
-        """Async version of evaluate_article_relevance."""
+    ) -> dict[str, str | float | None]:
+        """Async version of evaluate_article_relevance (abstract only)."""
         abstract = article_abstract or "[Abstract not available]"
         authors_str = ", ".join(article_authors[:3])
         if len(article_authors) > 3:
             authors_str += ", et al."
         year_str = str(article_year) if article_year else "Unknown"
 
-        prompt = f"""Evaluate if this article supports the following claim.
+        prompt = f"""Evaluate how this article relates to the following claim.
 
 CLAIM TO SUPPORT:
 {sentence}
@@ -438,35 +464,204 @@ Year: {year_str}
 Abstract: {abstract[:1500]}
 
 INSTRUCTIONS:
-Determine if this article provides evidence that DIRECTLY SUPPORTS the claim.
-The article doesn't need to say exactly the same thing, but should provide
-supporting evidence, data, or establish the foundation for the claim."""
+Based on the abstract, assess how this article relates to the claim:
+- SUPPORTS: Evidence clearly backs the claim
+- CONTRADICTS: Evidence contradicts the claim
+- PARTIALLY_SUPPORTS: Related but nuanced/conditional
+- INSUFFICIENT_INFO: Cannot determine from abstract alone
+- NOT_RELEVANT: Off-topic
+
+If the article suggests a modification to the original claim, provide the revised wording."""
 
         agent = Agent(
             model=self._get_model(),
             system_prompt=(
-                "You are an expert scientific reviewer evaluating if research articles "
-                "support specific claims from manuscript introductions."
+                "You are an expert scientific reviewer evaluating research articles. "
+                "Assess whether articles support, contradict, or relate to specific claims. "
+                "Be precise and cite specific evidence from the text."
             ),
             output_type=ArticleRelevance,
             output_retries=3,
         )
 
         try:
-            logger.debug(f"Evaluating article (async) '{article_title[:50]}...' for relevance")
+            logger.debug(
+                f"Evaluating article (async) '{article_title[:50]}...' from abstract"
+            )
             response = await agent.run(prompt)
             result = response.output
             return {
-                "relevant": result.relevant,
+                "verdict": result.verdict,
                 "confidence": result.confidence,
                 "reasoning": result.reasoning,
+                "suggested_modification": result.suggested_modification,
             }
         except Exception as e:
-            logger.error(f"Article relevance evaluation failed: {e}")
+            logger.error(f"Article evaluation failed: {e}")
             return {
-                "relevant": False,
+                "verdict": "INSUFFICIENT_INFO",
                 "confidence": 0.0,
                 "reasoning": f"Error: {e}",
+                "suggested_modification": None,
+            }
+
+    def evaluate_article_relevance_fulltext(
+        self,
+        sentence: str,
+        article_title: str,
+        article_authors: list[str],
+        article_year: int | None,
+        fulltext_content: str,
+    ) -> dict[str, str | float | None]:
+        """Evaluate article relevance using full text content.
+
+        This provides a more thorough evaluation when the full PDF is available.
+        The fulltext_content should be extracted text from the PDF.
+
+        Args:
+            sentence: The claim needing support.
+            article_title: Title of the article.
+            article_authors: List of author names.
+            article_year: Publication year (optional).
+            fulltext_content: Extracted text from the full PDF.
+
+        Returns:
+            Dict with 'verdict', 'confidence', 'reasoning', 'suggested_modification'.
+        """
+        authors_str = ", ".join(article_authors[:3])
+        if len(article_authors) > 3:
+            authors_str += ", et al."
+        year_str = str(article_year) if article_year else "Unknown"
+
+        # Limit content length to avoid token limits
+        truncated_content = fulltext_content[:20000]
+
+        prompt = f"""Evaluate how this article relates to the following claim using the FULL TEXT.
+
+CLAIM TO SUPPORT:
+{sentence}
+
+ARTICLE:
+Title: {article_title}
+Authors: {authors_str}
+Year: {year_str}
+
+FULL TEXT (truncated if very long):
+{truncated_content}
+
+INSTRUCTIONS:
+Based on the FULL TEXT, provide a thorough assessment:
+- SUPPORTS: Evidence clearly backs the claim
+- CONTRADICTS: Evidence contradicts the claim
+- PARTIALLY_SUPPORTS: Related but nuanced/conditional
+- INSUFFICIENT_INFO: Cannot determine from available text
+- NOT_RELEVANT: Off-topic
+
+Look for specific data, methodology, results, and conclusions that relate to the claim.
+If the article suggests a modification to the original claim, provide the revised wording."""
+
+        agent = Agent(
+            model=self._get_model(),
+            system_prompt=(
+                "You are an expert scientific reviewer with access to full research papers. "
+                "Thoroughly analyze the text to determine if it supports, contradicts, or "
+                "relates to specific claims. Cite specific sections or data."
+            ),
+            output_type=ArticleRelevance,
+            output_retries=3,
+        )
+
+        try:
+            logger.debug(f"Evaluating full text of '{article_title[:50]}...'")
+            response = agent.run_sync(prompt)
+            result = response.output
+            logger.info(
+                f"Full-text evaluation: verdict={result.verdict}, "
+                f"confidence={result.confidence:.2f}"
+            )
+            return {
+                "verdict": result.verdict,
+                "confidence": result.confidence,
+                "reasoning": result.reasoning,
+                "suggested_modification": result.suggested_modification,
+            }
+        except Exception as e:
+            logger.error(f"Full-text evaluation failed: {e}")
+            return {
+                "verdict": "INSUFFICIENT_INFO",
+                "confidence": 0.0,
+                "reasoning": f"Error during evaluation: {e}",
+                "suggested_modification": None,
+            }
+
+    async def evaluate_article_relevance_fulltext_async(
+        self,
+        sentence: str,
+        article_title: str,
+        article_authors: list[str],
+        article_year: int | None,
+        fulltext_content: str,
+    ) -> dict[str, str | float | None]:
+        """Async version of evaluate_article_relevance_fulltext."""
+        authors_str = ", ".join(article_authors[:3])
+        if len(article_authors) > 3:
+            authors_str += ", et al."
+        year_str = str(article_year) if article_year else "Unknown"
+
+        truncated_content = fulltext_content[:20000]
+
+        prompt = f"""Evaluate how this article relates to the following claim using the FULL TEXT.
+
+CLAIM TO SUPPORT:
+{sentence}
+
+ARTICLE:
+Title: {article_title}
+Authors: {authors_str}
+Year: {year_str}
+
+FULL TEXT (truncated if very long):
+{truncated_content}
+
+INSTRUCTIONS:
+Based on the FULL TEXT, provide a thorough assessment:
+- SUPPORTS: Evidence clearly backs the claim
+- CONTRADICTS: Evidence contradicts the claim
+- PARTIALLY_SUPPORTS: Related but nuanced/conditional
+- INSUFFICIENT_INFO: Cannot determine from available text
+- NOT_RELEVANT: Off-topic
+
+Look for specific data, methodology, results, and conclusions.
+If the article suggests a modification, provide revised wording."""
+
+        agent = Agent(
+            model=self._get_model(),
+            system_prompt=(
+                "You are an expert scientific reviewer with access to full research papers. "
+                "Thoroughly analyze the text to determine if it supports, contradicts, or "
+                "relates to specific claims. Cite specific sections or data."
+            ),
+            output_type=ArticleRelevance,
+            output_retries=3,
+        )
+
+        try:
+            logger.debug(f"Evaluating full text (async) of '{article_title[:50]}...'")
+            response = await agent.run(prompt)
+            result = response.output
+            return {
+                "verdict": result.verdict,
+                "confidence": result.confidence,
+                "reasoning": result.reasoning,
+                "suggested_modification": result.suggested_modification,
+            }
+        except Exception as e:
+            logger.error(f"Full-text evaluation failed: {e}")
+            return {
+                "verdict": "INSUFFICIENT_INFO",
+                "confidence": 0.0,
+                "reasoning": f"Error: {e}",
+                "suggested_modification": None,
             }
 
     def extract_abstract_from_html(
