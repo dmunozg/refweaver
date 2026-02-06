@@ -5,7 +5,6 @@ via Pydantic models.
 """
 
 import os
-from typing import Optional
 
 import requests
 from loguru import logger
@@ -67,12 +66,13 @@ class LLMConfig:
 
             self.model = first_model
             logger.info(f"Auto-detected model: {self.model}")
+            assert self.model is not None  # this feels dirty
             return self.model
 
         except requests.RequestException as e:
-            raise RuntimeError(f"Failed to fetch models from {self.base_url}: {e}")
+            raise RuntimeError(f"Failed to fetch models from {self.base_url}: {e}") from e
         except (KeyError, IndexError) as e:
-            raise RuntimeError(f"Unexpected response format from /models endpoint: {e}")
+            raise RuntimeError(f"Unexpected response format from /models endpoint: {e}") from e
 
 
 # Output models for structured LLM responses
@@ -124,7 +124,7 @@ class ArticleRelevance(BaseModel):
 class ExtractedAbstract(BaseModel):
     """Structured output for abstract extraction."""
 
-    abstract: Optional[str] = Field(
+    abstract: str | None = Field(
         None,
         description="The extracted abstract text, or null if not found",
     )
@@ -137,16 +137,16 @@ class ExtractedAbstract(BaseModel):
 class LLMClient:
     """Pydantic-ai powered LLM client for RefWeaver with structured output."""
 
-    def __init__(self, config: Optional[LLMConfig] = None) -> None:
+    def __init__(self, config: LLMConfig | None = None) -> None:
         """Initialize the LLM client.
 
         Args:
             config: LLM configuration. If None, creates from environment.
         """
         self.config = config or LLMConfig()
-        self._model_name: Optional[str] = None
-        self._provider: Optional[OpenAIProvider] = None
-        self._model: Optional[OpenAIChatModel] = None
+        self._model_name: str | None = None
+        self._provider: OpenAIProvider | None = None
+        self._model: OpenAIChatModel | None = None
 
         logger.info(f"LLMClient initialized with base_url: {self.config.base_url}")
 
@@ -277,9 +277,7 @@ Guidelines for sentences that DON'T need references:
             logger.debug(f"Analyzing sentence: {sentence[:80]}...")
             response = agent.run_sync(prompt)
             result = response.output
-            logger.debug(
-                f"Analysis result: needs_reference={result.needs_reference}"
-            )
+            logger.debug(f"Analysis result: needs_reference={result.needs_reference}")
             return {
                 "needs_reference": result.needs_reference,
                 "reason": result.reason,
@@ -345,8 +343,8 @@ Guidelines for sentences that DON'T need references:
         sentence: str,
         article_title: str,
         article_authors: list[str],
-        article_year: Optional[int],
-        article_abstract: Optional[str],
+        article_year: int | None,
+        article_abstract: str | None,
     ) -> dict[str, bool | str | float]:
         """Evaluate if an article is relevant to support a sentence.
 
@@ -398,8 +396,7 @@ supporting evidence, data, or establish the foundation for the claim."""
             response = agent.run_sync(prompt)
             result = response.output
             logger.info(
-                f"Article relevance: relevant={result.relevant}, "
-                f"confidence={result.confidence:.2f}"
+                f"Article relevance: relevant={result.relevant}, confidence={result.confidence:.2f}"
             )
             return {
                 "relevant": result.relevant,
@@ -419,8 +416,8 @@ supporting evidence, data, or establish the foundation for the claim."""
         sentence: str,
         article_title: str,
         article_authors: list[str],
-        article_year: Optional[int],
-        article_abstract: Optional[str],
+        article_year: int | None,
+        article_abstract: str | None,
     ) -> dict[str, bool | str | float]:
         """Async version of evaluate_article_relevance."""
         abstract = article_abstract or "[Abstract not available]"
@@ -456,9 +453,7 @@ supporting evidence, data, or establish the foundation for the claim."""
         )
 
         try:
-            logger.debug(
-                f"Evaluating article (async) '{article_title[:50]}...' for relevance"
-            )
+            logger.debug(f"Evaluating article (async) '{article_title[:50]}...' for relevance")
             response = await agent.run(prompt)
             result = response.output
             return {
@@ -478,7 +473,7 @@ supporting evidence, data, or establish the foundation for the claim."""
         self,
         html_content: str,
         article_title: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Extract abstract from HTML content using LLM.
 
         Args:
@@ -508,9 +503,7 @@ If no abstract is found, set found=false."""
         )
 
         try:
-            logger.debug(
-                f"Sending abstract extraction request for: {article_title[:50]}..."
-            )
+            logger.debug(f"Sending abstract extraction request for: {article_title[:50]}...")
             response = agent.run_sync(prompt)
             result = response.output
 
@@ -532,7 +525,7 @@ If no abstract is found, set found=false."""
         self,
         html_content: str,
         article_title: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Async version of extract_abstract_from_html."""
         prompt = f"""Extract the abstract from the following web page content.
 
