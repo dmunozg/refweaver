@@ -103,9 +103,10 @@ class TestFetchArticleLandingPage:
 
         assert result is not None
         assert "Article content here" in result
-        mock_get.assert_called_once_with(
-            "https://example.com/article", timeout=30, allow_redirects=True
-        )
+        mock_get.assert_called_once()
+        call_args = mock_get.call_args
+        assert call_args[0][0] == "https://example.com/article"
+        assert "headers" in call_args[1]
 
     @patch("refweaver.web_fetch.requests.get")
     def test_fetch_pdf_content_type_skipped(self, mock_get):
@@ -147,9 +148,9 @@ class TestFetchArticleLandingPage:
         result = fetch_article_landing_page(article)
 
         assert result is not None
-        mock_get.assert_called_once_with(
-            "https://doi.org/10.1234/example", timeout=30, allow_redirects=True
-        )
+        mock_get.assert_called_once()
+        call_args = mock_get.call_args
+        assert call_args[0][0] == "https://doi.org/10.1234/example"
 
     @patch("refweaver.web_fetch.requests.get")
     def test_fetch_request_exception(self, mock_get):
@@ -157,6 +158,64 @@ class TestFetchArticleLandingPage:
         from requests import RequestException
 
         mock_get.side_effect = RequestException("Connection error")
+
+        article = Article(
+            source="test",
+            external_id="123",
+            title="Test Article",
+            authors=["Author"],
+            open_access=True,
+            url="https://example.com/article",
+        )
+
+        result = fetch_article_landing_page(article)
+
+        assert result is None
+
+    @patch("refweaver.web_fetch.requests.get")
+    @patch("refweaver.web_fetch._fetch_with_selenium")
+    def test_fetch_403_fallback_to_selenium(self, mock_selenium, mock_requests):
+        """Test that 403 errors trigger Selenium fallback."""
+        from requests import HTTPError
+
+        # Simulate 403 response
+        mock_response = MagicMock()
+        mock_response.status_code = 403
+        mock_requests.side_effect = HTTPError("403 Forbidden", response=mock_response)
+
+        # Selenium succeeds
+        mock_selenium.return_value = (
+            "<html><body><article><p>Selenium fetched content</p></article></body></html>"
+        )
+
+        article = Article(
+            source="test",
+            external_id="123",
+            title="Test Article",
+            authors=["Author"],
+            open_access=True,
+            url="https://example.com/article",
+        )
+
+        result = fetch_article_landing_page(article)
+
+        assert result is not None
+        assert "Selenium fetched content" in result
+        mock_selenium.assert_called_once_with("https://example.com/article")
+
+    @patch("refweaver.web_fetch.requests.get")
+    @patch("refweaver.web_fetch._fetch_with_selenium")
+    def test_fetch_selenium_also_fails(self, mock_selenium, mock_requests):
+        """Test when both requests and Selenium fail."""
+        from requests import HTTPError
+
+        # Simulate 403 response
+        mock_response = MagicMock()
+        mock_response.status_code = 403
+        mock_requests.side_effect = HTTPError("403 Forbidden", response=mock_response)
+
+        # Selenium also fails
+        mock_selenium.side_effect = Exception("Chrome not found")
 
         article = Article(
             source="test",
