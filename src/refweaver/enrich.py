@@ -358,12 +358,100 @@ class ArticleEnricher:
 
         return enriched
 
+    def enrich_from_title(
+        self,
+        article: Article,
+        similarity_threshold: float = 0.85,
+    ) -> Article:
+        """Enrich article metadata by searching for the title in OpenAlex.
+
+        Searches OpenAlex using the article's title, checks for a high-similarity
+        match, and merges the found article's metadata (including DOI) into the
+        original article.
+
+        This is particularly useful for articles from sources like Perplexity
+        that may have titles but lack DOIs and other metadata.
+
+        Args:
+            article: Article to enrich (must have a title).
+            similarity_threshold: Minimum title similarity (0.0-1.0) to accept
+                                 a match. Default 0.85 to handle truncated titles.
+
+        Returns:
+            Article with enriched metadata if match found, otherwise original.
+        """
+        if not article.title or len(article.title) < 10:
+            logger.debug(f"Title too short or missing, skipping title enrichment: {article.title[:50]}...")
+            return article
+
+        # Skip if we already have a DOI (use CrossRef instead)
+        if article.doi:
+            logger.debug(f"Article already has DOI, skipping title enrichment: {article.doi}")
+            return article
+
+        # Clean the title (remove trailing "..." from truncated titles)
+        clean_title = article.title.rstrip(".").rstrip()
+
+        logger.info(f"Searching OpenAlex by title: {clean_title[:60]}...")
+
+        try:
+            # Search OpenAlex with the title
+            from refweaver.dedup import title_similarity, merge_articles
+
+            results = self.openalex.search(clean_title, limit=5)
+
+            if not results:
+                logger.debug(f"No results from OpenAlex for title: {clean_title[:50]}...")
+                return article
+
+            # Find best match above threshold
+            best_match: Article | None = None
+            best_similarity = 0.0
+
+            for candidate in results:
+                if not candidate.title:
+                    continue
+
+                # Clean candidate title too
+                clean_candidate = candidate.title.rstrip(".").rstrip()
+                sim = title_similarity(clean_title, clean_candidate)
+                logger.debug(f"Title similarity: {sim:.3f} - '{candidate.title[:60]}...'")
+
+                if sim >= similarity_threshold and sim > best_similarity:
+                    best_match = candidate
+                    best_similarity = sim
+
+            if best_match:
+                logger.success(
+                    f"Found match with similarity {best_similarity:.3f}: "
+                    f"{best_match.title[:50]}..."
+                )
+                # Merge the matched article's metadata into the original
+                merged = merge_articles([article, best_match])
+                if merged:
+                    logger.info(
+                        f"Merged metadata: DOI={merged.doi is not None}, "
+                        f"authors={len(merged.authors)}, year={merged.year}"
+                    )
+                    return merged
+            else:
+                logger.debug(
+                    f"No match above threshold {similarity_threshold} for: "
+                    f"{clean_title[:50]}..."
+                )
+
+        except Exception as e:
+            logger.warning(f"Title enrichment failed: {e}")
+
+        return article
+
     def fill_abstract(
         self,
         article: Article,
         try_same_source: bool = True,
         try_cross_api: bool = True,
         try_crossref: bool = True,
+        try_title_search: bool = True,
         try_llm: bool = False,
     ) -> Article:
         """Fill missing abstract using available methods.
@@ -373,6 +461,7 @@ class ArticleEnricher:
             try_same_source: Try fetching detailed data from same source.
             try_cross_api: Try other APIs via DOI lookup.
             try_crossref: Try CrossRef BibTeX enrichment.
+            try_title_search: Try searching by title in OpenAlex.
             try_llm: Try LLM-based web extraction (requires use_llm_extractor=True).
 
         Returns:
@@ -405,7 +494,14 @@ class ArticleEnricher:
                 logger.success("Abstract filled via CrossRef")
                 return article
 
-        # Strategy 4: LLM web extraction
+        # Strategy 4: Title-based search (for articles without DOI)
+        if try_title_search and not article.doi:
+            article = self.enrich_from_title(article)
+            if article.abstract:
+                logger.success("Abstract filled via title search")
+                return article
+
+        # Strategy 5: LLM web extraction
         if try_llm and self.use_llm_extractor:
             article = self._extract_with_llm(article)
             if article.abstract:
@@ -421,6 +517,7 @@ class ArticleEnricher:
         try_same_source: bool = True,
         try_cross_api: bool = True,
         try_crossref: bool = True,
+        try_title_search: bool = True,
         try_llm: bool = False,
     ) -> list[Article]:
         """Fill missing abstracts for a list of articles.
@@ -430,6 +527,7 @@ class ArticleEnricher:
             try_same_source: Try fetching detailed data from same source.
             try_cross_api: Try other APIs via DOI lookup.
             try_crossref: Try CrossRef BibTeX enrichment.
+            try_title_search: Try searching by title in OpenAlex.
             try_llm: Try LLM-based web extraction.
 
         Returns:
@@ -446,6 +544,7 @@ class ArticleEnricher:
                 try_same_source=try_same_source,
                 try_cross_api=try_cross_api,
                 try_crossref=try_crossref,
+                try_title_search=try_title_search,
                 try_llm=try_llm,
             )
             if enriched.abstract and not article.abstract:

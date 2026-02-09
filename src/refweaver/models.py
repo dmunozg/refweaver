@@ -275,7 +275,7 @@ class Article(BaseModel):
             url = f"https://doi.org/{self.doi}"
             headers = {
                 "Accept": "application/x-bibtex",
-                "User-Agent": "RefWeaver/1.0 (mailto:refweaver@example.com)"
+                "User-Agent": "RefWeaver/1.0 (mailto:diego@asgamers.net)"
             }
 
             response = requests.get(url, headers=headers, timeout=30)

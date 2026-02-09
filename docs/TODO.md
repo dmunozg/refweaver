@@ -46,6 +46,7 @@
 7. **Article Enrichment** (`enrich.py`)
    - Cross-API abstract lookup
    - **NEW: CrossRef enrichment** - Query DOI for BibTeX metadata (authors, journal, volume, pages, publisher)
+   - **NEW: Title-based enrichment** - Search OpenAlex by title for articles without DOI, merge at 85% similarity
    - LLM-based web extraction
    - Selenium fallback for 403-blocked sites
 
@@ -116,6 +117,7 @@
    - [x] **Unified search with fallback** - `UnifiedSearchWithFallback` triggers Perplexity when primary sources return <3 results
    - [x] **BibTeX export** - `to_bibtex()` method and `export_to_bibtex()` utility
    - [x] **CrossRef enrichment** - `enrich_from_crossref()` for DOI-based metadata
+   - [x] **Title-based enrichment** - `enrich_from_title()` for articles without DOI, searches OpenAlex by title
    - [ ] Increase search limits beyond 15/keyword
    - [ ] Add more specific keywords for quantitative claims (e.g., include "280 Gt")
    - [ ] Try different keyword combinations

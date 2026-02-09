@@ -44,7 +44,9 @@ class PerplexityAdapter:
         self.base_url = self.OPENROUTER_BASE_URL
         logger.info(f"PerplexityAdapter initialized with model: {model}")
 
-    def _make_request(self, messages: list[dict[str, str]], temperature: float = 0.2) -> dict[str, Any]:
+    def _make_request(
+        self, messages: list[dict[str, str]], temperature: float = 0.2
+    ) -> dict[str, Any]:
         """Make a request to OpenRouter API.
 
         Args:
@@ -60,7 +62,7 @@ class PerplexityAdapter:
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/refweaver/refweaver",  # Required by OpenRouter
+            "HTTP-Referer": "https://github.com/dmunozg/refweaver",  # Required by OpenRouter
             "X-Title": "RefWeaver Academic Search",  # Helps with rate limits
         }
 
@@ -102,10 +104,12 @@ class PerplexityAdapter:
                         if isinstance(ann, dict) and ann.get("type") == "url_citation":
                             url_citation = ann.get("url_citation", {})
                             if url_citation:
-                                annotations.append({
-                                    "url": url_citation.get("url", ""),
-                                    "title": url_citation.get("title", ""),
-                                })
+                                annotations.append(
+                                    {
+                                        "url": url_citation.get("url", ""),
+                                        "title": url_citation.get("title", ""),
+                                    }
+                                )
 
         return annotations
 
@@ -129,7 +133,9 @@ class PerplexityAdapter:
 
         return list(set(citations))  # Deduplicate
 
-    def _parse_article_from_url(self, url: str, title_override: str | None = None) -> Article | None:
+    def _parse_article_from_url(
+        self, url: str, title_override: str | None = None
+    ) -> Article | None:
         """Create a minimal Article from a citation URL.
 
         This is a best-effort parsing since Perplexity returns URLs,
@@ -278,10 +284,10 @@ class PerplexityAdapter:
         titles: list[tuple[str, str | None]] = []
 
         # Look for numbered citations like [1], [2], etc.
-        citation_pattern = r'\[(\d+)\]\s*(.*?)(?=\[\d+\]|$)'
+        citation_pattern = r"\[(\d+)\]\s*(.*?)(?=\[\d+\]|$)"
         matches = re.findall(citation_pattern, content, re.DOTALL)
 
-        for num, text in matches:
+        for _num, text in matches:
             # Clean up the text
             text = text.strip()
             # Try to find a title - look for quoted text or first sentence
@@ -290,7 +296,7 @@ class PerplexityAdapter:
                 title = title_match.group(1).strip()
             else:
                 # Take first line or first 100 chars
-                first_line = text.split('\n')[0].strip()
+                first_line = text.split("\n")[0].strip()
                 title = first_line[:150] if len(first_line) > 150 else first_line
 
             # Try to find a URL in the text
@@ -333,7 +339,9 @@ class PerplexityAdapter:
         content, citation_urls = self._extract_content_and_citations(response)
         titles = self._extract_titles_from_content(content)
 
-        logger.debug(f"No annotations found. Extracted {len(citation_urls)} URLs and {len(titles)} titles from content")
+        logger.debug(
+            f"No annotations found. Extracted {len(citation_urls)} URLs and {len(titles)} titles from content"
+        )
 
         if not citation_urls and not titles:
             logger.warning("No citations or titles found in Perplexity response")
@@ -466,10 +474,7 @@ Focus on papers that would provide authoritative citations for this claim."""
         articles = self.search(query, limit=limit)
 
         if len(articles) < min_results_threshold and self.model == "perplexity/sonar":
-            logger.info(
-                f"Only {len(articles)} results from sonar, "
-                "retrying with sonar-pro..."
-            )
+            logger.info(f"Only {len(articles)} results from sonar, retrying with sonar-pro...")
             # Temporarily switch to pro model
             original_model = self.model
             self.model = "perplexity/sonar-pro"
