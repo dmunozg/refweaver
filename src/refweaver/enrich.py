@@ -332,11 +332,38 @@ class ArticleEnricher:
             logger.warning(f"LLM extraction failed: {e}")
             return article
 
+    def enrich_from_crossref(self, article: Article) -> Article:
+        """Enrich article metadata from CrossRef API using DOI.
+
+        Queries CrossRef API with the article's DOI and updates
+        all available fields with BibTeX-formatted metadata.
+
+        Args:
+            article: Article to enrich.
+
+        Returns:
+            Article with enriched metadata if successful, otherwise original.
+        """
+        if not article.doi:
+            logger.debug(f"No DOI for article, skipping CrossRef: {article.title[:50]}...")
+            return article
+
+        logger.info(f"Enriching from CrossRef: {article.doi}")
+        enriched = article.enrich_from_crossref()
+
+        if enriched != article:
+            logger.success(f"CrossRef enrichment successful for: {article.title[:50]}...")
+        else:
+            logger.debug(f"CrossRef enrichment failed or no new data for: {article.title[:50]}...")
+
+        return enriched
+
     def fill_abstract(
         self,
         article: Article,
         try_same_source: bool = True,
         try_cross_api: bool = True,
+        try_crossref: bool = True,
         try_llm: bool = False,
     ) -> Article:
         """Fill missing abstract using available methods.
@@ -345,6 +372,7 @@ class ArticleEnricher:
             article: Article to enrich.
             try_same_source: Try fetching detailed data from same source.
             try_cross_api: Try other APIs via DOI lookup.
+            try_crossref: Try CrossRef BibTeX enrichment.
             try_llm: Try LLM-based web extraction (requires use_llm_extractor=True).
 
         Returns:
@@ -370,7 +398,14 @@ class ArticleEnricher:
                 logger.success("Abstract filled via cross-API lookup")
                 return article
 
-        # Strategy 3: LLM web extraction
+        # Strategy 3: CrossRef enrichment
+        if try_crossref and article.doi:
+            article = self.enrich_from_crossref(article)
+            if article.abstract:
+                logger.success("Abstract filled via CrossRef")
+                return article
+
+        # Strategy 4: LLM web extraction
         if try_llm and self.use_llm_extractor:
             article = self._extract_with_llm(article)
             if article.abstract:
@@ -385,6 +420,7 @@ class ArticleEnricher:
         articles: list[Article],
         try_same_source: bool = True,
         try_cross_api: bool = True,
+        try_crossref: bool = True,
         try_llm: bool = False,
     ) -> list[Article]:
         """Fill missing abstracts for a list of articles.
@@ -393,6 +429,7 @@ class ArticleEnricher:
             articles: List of articles to enrich.
             try_same_source: Try fetching detailed data from same source.
             try_cross_api: Try other APIs via DOI lookup.
+            try_crossref: Try CrossRef BibTeX enrichment.
             try_llm: Try LLM-based web extraction.
 
         Returns:
@@ -408,6 +445,7 @@ class ArticleEnricher:
                 article,
                 try_same_source=try_same_source,
                 try_cross_api=try_cross_api,
+                try_crossref=try_crossref,
                 try_llm=try_llm,
             )
             if enriched.abstract and not article.abstract:

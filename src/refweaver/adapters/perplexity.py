@@ -1,6 +1,7 @@
 """Perplexity Sonar adapter for RefWeaver via OpenRouter."""
 
 import os
+from datetime import date
 from typing import Any
 
 import requests
@@ -158,7 +159,8 @@ class PerplexityAdapter:
                     doi = url[doi_start + 1 :].split("?")[0].split("#")[0]
 
             # Try to identify source type from URL
-            source_hints = {
+            # Academic journals and preprint servers -> @article
+            journal_hints = {
                 "arxiv.org": "arXiv preprint",
                 "pubmed": "PubMed",
                 "ncbi.nlm.nih.gov": "PubMed",
@@ -169,13 +171,33 @@ class PerplexityAdapter:
                 "springer": "Springer",
                 "elsevier": "Elsevier",
                 "wiley": "Wiley",
+                "copernicus.org": "Copernicus",
+                "agu.org": "AGU",
+                "onlinelibrary.wiley.com": "Wiley",
             }
 
+            # Government/research org reports -> @techreport or @misc
+            report_hints = [
+                "nasa.gov",
+                "noaa.gov",
+                "jpl.nasa.gov",
+                "gsfc.nasa.gov",
+            ]
+
             journal: str | None = None
-            for hint, name in source_hints.items():
+            entry_type = "article"  # Default to article
+
+            for hint, name in journal_hints.items():
                 if hint in url.lower():
                     journal = name
+                    entry_type = "article"
                     break
+            else:
+                # Check if it's a report/webpage
+                for hint in report_hints:
+                    if hint in url.lower():
+                        entry_type = "misc"
+                        break
 
             # Use title override if provided, otherwise generate from URL
             if title_override:
@@ -192,6 +214,7 @@ class PerplexityAdapter:
             return Article(
                 source=self.SOURCE_NAME,
                 external_id=doi or url,
+                entry_type=entry_type,
                 title=title,  # Placeholder - needs enrichment
                 authors=[],  # Unknown - needs enrichment
                 year=None,  # Unknown - needs enrichment
@@ -203,6 +226,7 @@ class PerplexityAdapter:
                 pdf_url=None,
                 open_access="arxiv.org" in url.lower() or bool(doi),
                 citation_count=None,
+                accessed_date=date.today(),
             )
 
         except Exception as e:

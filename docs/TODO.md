@@ -45,13 +45,21 @@
 
 7. **Article Enrichment** (`enrich.py`)
    - Cross-API abstract lookup
+   - **NEW: CrossRef enrichment** - Query DOI for BibTeX metadata (authors, journal, volume, pages, publisher)
    - LLM-based web extraction
    - Selenium fallback for 403-blocked sites
 
 ### Data Models (`models.py`)
 - `Article`: Unified model with DOI, authors, year, abstract, PDF URL, open_access flag
+- **NEW: BibTeX support** - `entry_type` field for @article/@misc/etc., `to_bibtex()` method
+- **NEW: CrossRef enrichment** - `enrich_from_crossref()` method for DOI-based metadata lookup
 - `Sentence`: Text + `needs_reference` boolean + reason
 - All Pydantic-based, immutable
+
+### Citation Export (`bibtex.py`)
+- Export articles to `.bib` files
+- `export_to_bibtex()` - Export list of articles
+- `export_analysis_results()` - Export analysis results with verdict notes
 
 ### LLM Integration (`llm.py`)
 - Pydantic-ai based with structured output
@@ -106,6 +114,8 @@
 1. **Improve Article Finding**
    - [x] **Perplexity fallback adapter** - Created `PerplexityAdapter` using OpenRouter
    - [x] **Unified search with fallback** - `UnifiedSearchWithFallback` triggers Perplexity when primary sources return <3 results
+   - [x] **BibTeX export** - `to_bibtex()` method and `export_to_bibtex()` utility
+   - [x] **CrossRef enrichment** - `enrich_from_crossref()` for DOI-based metadata
    - [ ] Increase search limits beyond 15/keyword
    - [ ] Add more specific keywords for quantitative claims (e.g., include "280 Gt")
    - [ ] Try different keyword combinations
