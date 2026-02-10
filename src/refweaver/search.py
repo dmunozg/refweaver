@@ -6,7 +6,6 @@ from typing import Any
 from loguru import logger
 
 from refweaver.adapters.openalex import OpenAlexAdapter
-from refweaver.adapters.perplexity import PerplexityAdapter
 from refweaver.adapters.scholarly import GoogleScholarAdapter
 from refweaver.adapters.semantic_scholar import SemanticScholarAdapter
 from refweaver.dedup import deduplicate_articles
@@ -21,15 +20,18 @@ class UnifiedSearch:
     """Unified search across multiple academic databases.
 
     Provides a single interface to search Semantic Scholar, OpenAlex,
-    Google Scholar, and Perplexity simultaneously with automatic deduplication.
+    and Google Scholar simultaneously with automatic deduplication.
+
+    Note: Perplexity is NOT included here because it works differently -
+    it takes full sentences/claims and performs semantic search, while
+    these adapters require keyword-based queries. Use PerplexityAdapter
+    directly for claim-based semantic search.
     """
 
     def __init__(
         self,
         semantic_scholar_api_key: str | None = None,
         openalex_email: str | None = None,
-        perplexity_api_key: str | None = None,
-        perplexity_model: str = "perplexity/sonar",
         use_scholarly_proxy: bool = False,
     ) -> None:
         """Initialize the unified search with all adapters.
@@ -39,9 +41,6 @@ class UnifiedSearch:
                                      (for higher rate limits).
             openalex_email: Email address for OpenAlex (recommended for
                            higher rate limits, can be any valid email).
-            perplexity_api_key: OpenRouter API key for Perplexity. If not provided,
-                               will look for OPENROUTER_API_KEY environment variable.
-            perplexity_model: Perplexity model to use (default: "perplexity/sonar").
             use_scholarly_proxy: Whether to use proxy rotation for Google
                                 Scholar to help avoid rate limits.
         """
@@ -50,18 +49,6 @@ class UnifiedSearch:
         )
         self.openalex: OpenAlexAdapter = OpenAlexAdapter(api_key=openalex_email)
         self.google_scholar: GoogleScholarAdapter = GoogleScholarAdapter(use_proxy=use_scholarly_proxy)
-
-        # Perplexity is optional - only initialize if API key is available
-        self.perplexity: PerplexityAdapter | None = None
-        if perplexity_api_key or self._get_openrouter_key():
-            try:
-                self.perplexity = PerplexityAdapter(
-                    api_key=perplexity_api_key,
-                    model=perplexity_model,
-                )
-                logger.info("Perplexity adapter initialized")
-            except ValueError as e:
-                logger.warning(f"Could not initialize Perplexity adapter: {e}")
 
         logger.info("UnifiedSearch initialized with all adapters")
 
@@ -74,7 +61,6 @@ class UnifiedSearch:
         use_semantic_scholar: bool = True,
         use_openalex: bool = True,
         use_google_scholar: bool = True,
-        use_perplexity: bool = True,
         deduplicate: bool = True,
         title_threshold: float = 0.85,
         author_threshold: float = 0.5,
@@ -86,7 +72,7 @@ class UnifiedSearch:
         skipped and the search continues with remaining sources.
 
         Args:
-            query: Search query string.
+            query: Search query string (keywords for keyword-based search).
             limit: Maximum total number of results to return (default: None = unlimited).
                    Applied AFTER deduplication.
             limit_per_source: Maximum results per source (default: 5).
@@ -94,7 +80,6 @@ class UnifiedSearch:
             use_semantic_scholar: Whether to search Semantic Scholar.
             use_openalex: Whether to search OpenAlex.
             use_google_scholar: Whether to search Google Scholar.
-            use_perplexity: Whether to search Perplexity (if configured).
             deduplicate: Whether to deduplicate results (default: True).
             title_threshold: Minimum title similarity for deduplication
                            (0.0-1.0, default: 0.85).
@@ -106,6 +91,9 @@ class UnifiedSearch:
 
         Raises:
             UserWarning: If no articles are found from any source.
+
+        Note:
+            For semantic/claim-based search, use PerplexityAdapter directly.
         """
         all_articles: list[Article] = []
         failed_sources: list[str] = []
@@ -116,10 +104,6 @@ class UnifiedSearch:
             ("OpenAlex", use_openalex, self.openalex),
             ("Google Scholar", use_google_scholar, self.google_scholar),
         ]
-
-        # Add Perplexity if available and enabled
-        if use_perplexity and self.perplexity:
-            sources.append(("Perplexity", True, self.perplexity))
 
         logger.info(
             f"Starting unified search for query: '{query}' "
@@ -189,11 +173,6 @@ class UnifiedSearch:
         logger.info(f"Search complete. Returning {len(all_articles)} articles")
         return all_articles
 
-    def _get_openrouter_key(self) -> str | None:
-        """Get OpenRouter API key from environment."""
-        import os
-        return os.getenv("OPENROUTER_API_KEY")
-
     def search_single_source(
         self,
         source: str,
@@ -203,7 +182,7 @@ class UnifiedSearch:
         """Search a single source by name.
 
         Args:
-            source: One of 'semantic_scholar', 'openalex', 'google_scholar', or 'perplexity'.
+            source: One of 'semantic_scholar', 'openalex', or 'google_scholar'.
             query: Search query string.
             limit: Maximum number of results.
 
@@ -219,10 +198,6 @@ class UnifiedSearch:
             "openalex": (self.openalex, "OpenAlex"),
             "google_scholar": (self.google_scholar, "Google Scholar"),
         }
-
-        # Add Perplexity if available
-        if self.perplexity:
-            source_map["perplexity"] = (self.perplexity, "Perplexity")
 
         if source not in source_map:
             raise ValueError(
