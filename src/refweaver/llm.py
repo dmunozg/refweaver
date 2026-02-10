@@ -5,9 +5,9 @@ via Pydantic models.
 """
 
 import os
+from typing import Any
 
 import requests
-from typing import Any
 from loguru import logger
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent

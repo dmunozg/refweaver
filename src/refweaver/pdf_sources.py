@@ -57,7 +57,7 @@ def resolve_pdf_via_unpaywall(article: "Article", email: str | None = None) -> s
 
         # Check if article is OA but no direct PDF link
         if data.get("is_oa"):
-            logger.debug(f"Article is OA but no direct PDF link from Unpaywall")
+            logger.debug("Article is OA but no direct PDF link from Unpaywall")
 
         return None
 
@@ -111,10 +111,7 @@ def resolve_pdf_via_annas_archive(article: "Article") -> str | None:
             href = link.get("href", "")
             if "/download/" in href or href.endswith(".pdf"):
                 # Convert relative URL to absolute
-                if href.startswith("/"):
-                    pdf_url = f"https://annas-archive.org{href}"
-                else:
-                    pdf_url = href
+                pdf_url = f"https://annas-archive.org{href}" if href.startswith("/") else href
 
                 logger.info(f"Anna's Archive found PDF for: {article.title[:50]}...")
                 return pdf_url

@@ -1,5 +1,6 @@
 """Data models for RefWeaver."""
 
+import contextlib
 from datetime import date
 from typing import Any
 
@@ -332,10 +333,8 @@ class Article(BaseModel):
                 updates["title"] = value
 
             elif field_name == "year":
-                try:
+                with contextlib.suppress(ValueError):
                     updates["year"] = int(value)
-                except ValueError:
-                    pass
 
             elif field_name == "month":
                 # Try to parse month name or number
@@ -348,10 +347,8 @@ class Article(BaseModel):
                 if month_lower in month_map:
                     updates["month"] = month_map[month_lower]
                 else:
-                    try:
+                    with contextlib.suppress(ValueError):
                         updates["month"] = int(value)
-                    except ValueError:
-                        pass
 
             elif field_name == "journal":
                 updates["journal"] = value
@@ -375,9 +372,7 @@ class Article(BaseModel):
                 updates["abstract"] = value
 
             elif field_name == "url":
-                try:
+                with contextlib.suppress(Exception):
                     updates["url"] = HttpUrl(value)
-                except Exception:
-                    pass
 
         return updates if updates else None

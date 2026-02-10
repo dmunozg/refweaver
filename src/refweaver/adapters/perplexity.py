@@ -5,8 +5,9 @@ from datetime import date
 from typing import Any
 
 import requests
-from pydantic import HttpUrl
 from loguru import logger
+from pydantic import HttpUrl
+
 from refweaver.models import Article
 from refweaver.timing import run_with_timeout, timed
 

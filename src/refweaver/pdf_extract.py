@@ -4,7 +4,6 @@ Provides functions to download and extract text from PDF files,
 particularly useful for open-access articles.
 """
 
-import io
 import re
 from typing import TYPE_CHECKING
 
@@ -254,13 +253,13 @@ def is_pdf_url(url: str) -> bool:
     """
     url_lower = url.lower()
     # Check common PDF indicators
-    if url_lower.endswith('.pdf'):
-        return True
-    if '/pdf/' in url_lower or '/download/' in url_lower:
-        return True
-    if 'pdf=1' in url_lower or 'download=1' in url_lower:
-        return True
-    return False
+    return (
+        url_lower.endswith('.pdf')
+        or '/pdf/' in url_lower
+        or '/download/' in url_lower
+        or 'pdf=1' in url_lower
+        or 'download=1' in url_lower
+    )
 
 
 def try_get_fulltext_from_pdf(
@@ -297,7 +296,7 @@ def try_get_fulltext_from_pdf(
         alt_url = find_pdf_url(article, email=email)
 
         if alt_url:
-            logger.info(f"Found alternative PDF URL, downloading...")
+            logger.info("Found alternative PDF URL, downloading...")
             return download_and_extract_pdf(alt_url)
 
     logger.debug(f"Could not get PDF text for: {article.title[:50]}...")

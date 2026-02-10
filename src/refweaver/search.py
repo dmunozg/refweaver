@@ -12,7 +12,6 @@ from refweaver.dedup import deduplicate_articles
 from refweaver.models import Article
 from refweaver.timing import timed_info
 
-
 DEFAULT_LIMIT_PER_SOURCE = 5
 
 

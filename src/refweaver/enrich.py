@@ -399,11 +399,11 @@ class ArticleEnricher:
             Article with enriched metadata if DOI found and validated,
             otherwise returns original article.
         """
+        from refweaver.dedup import merge_articles, title_similarity
         from refweaver.pdf_extract import (
             extract_doi_from_pdf_url,
             is_pdf_url,
         )
-        from refweaver.dedup import title_similarity, merge_articles
 
         # Skip if we already have a DOI
         if article.doi:
@@ -458,7 +458,7 @@ class ArticleEnricher:
 
         # Create a temporary article with the extracted DOI to query CrossRef
         from datetime import date
-        from pydantic import HttpUrl
+
 
         temp_article = Article(
             source="pdf_extraction",
@@ -856,7 +856,7 @@ class ArticleEnricher:
 
         try:
             # Search OpenAlex with the title
-            from refweaver.dedup import title_similarity, merge_articles
+            from refweaver.dedup import merge_articles, title_similarity
 
             results = self.openalex.search(clean_title, limit=5)
 

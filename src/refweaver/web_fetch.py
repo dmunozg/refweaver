@@ -63,9 +63,12 @@ def _fetch_with_selenium(url: str, timeout: int = 30) -> str:
         logger.debug(f"Selenium successfully fetched page: {len(html)} chars")
 
         # Check if we got a "JavaScript required" message
-        if "javascript" in html.lower() and ("enable" in html.lower() or "required" in html.lower()):
-            if len(html) < 5000:  # Likely just a JS warning page
-                logger.warning("Page requires JavaScript but content may not have loaded properly")
+        if (
+            "javascript" in html.lower()
+            and ("enable" in html.lower() or "required" in html.lower())
+            and len(html) < 5000  # Likely just a JS warning page
+        ):
+            logger.warning("Page requires JavaScript but content may not have loaded properly")
 
         return html
     finally:

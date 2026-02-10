@@ -2,8 +2,9 @@
 
 import functools
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
 
 from loguru import logger
 
@@ -95,7 +96,7 @@ class Timer:
         return time.perf_counter() - self.start
 
 
-def run_with_timeout(
+def run_with_timeout[T](
     func: Callable[..., T],
     timeout_seconds: float,
     *args: Any,
@@ -119,10 +120,10 @@ def run_with_timeout(
         future = executor.submit(func, *args, **kwargs)
         try:
             return future.result(timeout=timeout_seconds)
-        except TimeoutError:
+        except TimeoutError as _err:
             raise TimeoutError(
                 f"Function {func.__qualname__} timed out after {timeout_seconds}s"
-            )
+            ) from _err
 
 
 def timeout(seconds: float):
