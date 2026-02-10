@@ -9,6 +9,7 @@ from loguru import logger
 from pydantic import HttpUrl
 
 from refweaver.models import Article
+from refweaver.timing import timed
 
 
 class PerplexityAdapter:
@@ -386,6 +387,7 @@ class PerplexityAdapter:
 
         return articles
 
+    @timed
     def search(
         self,
         query: str,

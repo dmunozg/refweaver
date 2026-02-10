@@ -6,6 +6,7 @@ from pydantic import HttpUrl
 from semanticscholar import SemanticScholar  # type: ignore[import-untyped]
 
 from refweaver.models import Article
+from refweaver.timing import timed
 
 
 class SemanticScholarAdapter:
@@ -191,6 +192,7 @@ class SemanticScholarAdapter:
             citation_count=citation_count,
         )
 
+    @timed
     def search(
         self,
         query: str,

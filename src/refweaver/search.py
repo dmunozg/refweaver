@@ -11,6 +11,7 @@ from refweaver.adapters.scholarly import GoogleScholarAdapter
 from refweaver.adapters.semantic_scholar import SemanticScholarAdapter
 from refweaver.dedup import deduplicate_articles
 from refweaver.models import Article
+from refweaver.timing import timed_info
 
 
 DEFAULT_LIMIT_PER_SOURCE = 5
@@ -64,11 +65,7 @@ class UnifiedSearch:
 
         logger.info("UnifiedSearch initialized with all adapters")
 
-    def _get_openrouter_key(self) -> str | None:
-        """Get OpenRouter API key from environment."""
-        import os
-        return os.getenv("OPENROUTER_API_KEY")
-
+    @timed_info
     def search(
         self,
         query: str,
@@ -191,6 +188,11 @@ class UnifiedSearch:
 
         logger.info(f"Search complete. Returning {len(all_articles)} articles")
         return all_articles
+
+    def _get_openrouter_key(self) -> str | None:
+        """Get OpenRouter API key from environment."""
+        import os
+        return os.getenv("OPENROUTER_API_KEY")
 
     def search_single_source(
         self,

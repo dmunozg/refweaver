@@ -6,6 +6,7 @@ from pyalex import Works  # type: ignore[import-untyped]
 from pydantic import HttpUrl
 
 from refweaver.models import Article
+from refweaver.timing import timed
 
 
 class OpenAlexAdapter:
@@ -212,6 +213,7 @@ class OpenAlexAdapter:
             citation_count=citation_count,
         )
 
+    @timed
     def search(
         self,
         query: str,
