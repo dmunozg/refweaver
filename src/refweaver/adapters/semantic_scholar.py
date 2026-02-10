@@ -4,7 +4,7 @@ from typing import Any
 
 from loguru import logger
 from pydantic import HttpUrl
-from semanticscholar import SemanticScholar  # type: ignore[import-untyped]
+from semanticscholar import SemanticScholar
 
 from refweaver.models import Article
 from refweaver.timing import run_with_timeout, timed

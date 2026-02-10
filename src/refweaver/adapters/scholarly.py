@@ -3,7 +3,7 @@
 from typing import Any
 
 from pydantic import HttpUrl
-from scholarly import ProxyGenerator, scholarly  # type: ignore[import-untyped]
+from scholarly import ProxyGenerator, scholarly
 
 from refweaver.models import Article
 

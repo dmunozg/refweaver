@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from refweaver.models import Article
 
@@ -54,7 +55,7 @@ def export_to_bibtex(
 
 
 def export_analysis_results(
-    results: list[dict],
+    results: list[dict[str, Any]],
     output_path: str | Path,
     include_insufficient: bool = False,
 ) -> Path:

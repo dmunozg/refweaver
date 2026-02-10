@@ -249,6 +249,8 @@ class SentenceAnalyzer:
                 confidence=0.0,
                 synthesis=f"Only {len(relevant_with_stance)} relevant articles found. "
                           f"Need at least {min_relevant_articles} for a reliable verdict.",
+                suggested_citation=None,
+                suggested_rewording=None,
             )
 
         # Prepare evaluation data for LLM (include index for matching back)

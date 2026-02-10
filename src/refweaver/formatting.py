@@ -57,18 +57,19 @@ def articles_to_table(
 
     # Try tabulate for nice formatting
     try:
-        from tabulate import tabulate
+        from tabulate import tabulate  # type: ignore[import-untyped]
 
         headers = [col.replace("_", " ").title() for col in columns]
         table_data = [[row.get(col, "-") for col in columns] for row in rows]
-        return tabulate(table_data, headers=headers, tablefmt="simple")
+        result: str = tabulate(table_data, headers=headers, tablefmt="simple")
+        return result
     except ImportError:
         # Fallback to simple formatting
         logger.debug("tabulate not installed, using simple formatting")
         return _simple_table_format(rows, columns)
 
 
-def _simple_table_format(rows: list[dict], columns: list[str]) -> str:
+def _simple_table_format(rows: list[dict[str, Any]], columns: list[str]) -> str:
     """Simple table formatting without external dependencies."""
     # Calculate column widths
     widths = {col: len(col) for col in columns}
@@ -173,11 +174,12 @@ def evaluations_to_table(evaluations: list[Any]) -> str:
     try:
         from tabulate import tabulate
 
-        return tabulate(
+        result: str = tabulate(
             rows,
             headers="keys",
             tablefmt="simple",
             showindex=False,
         )
+        return result
     except ImportError:
         return _simple_table_format(rows, list(rows[0].keys()))

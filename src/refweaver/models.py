@@ -55,7 +55,7 @@ class Article(BaseModel):
 
     # Citation details
     volume: str | None = None
-    issue: str | None = Field(default=None, alias="number")
+    issue: str | None = Field(default=None, validation_alias="number")
     pages: str | None = None
     doi: str | None = None
 

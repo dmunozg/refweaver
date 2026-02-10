@@ -82,7 +82,8 @@ class PerplexityAdapter:
             timeout=60,
         )
         response.raise_for_status()
-        return response.json()
+        result: dict[str, Any] = response.json()
+        return result
 
     def _extract_annotations(self, response: dict[str, Any]) -> list[dict[str, Any]]:
         """Extract structured citation annotations from Perplexity response.
@@ -97,16 +98,17 @@ class PerplexityAdapter:
         """
         annotations: list[dict[str, Any]] = []
 
-        choices = response.get("choices", [])
-        if choices and isinstance(choices, list):
-            message = choices[0].get("message", {})
-            if isinstance(message, dict):
-                msg_annotations = message.get("annotations", [])
-                if isinstance(msg_annotations, list):
-                    for ann in msg_annotations:
-                        if isinstance(ann, dict) and ann.get("type") == "url_citation":
-                            url_citation = ann.get("url_citation", {})
-                            if url_citation:
+        choices_raw = response.get("choices", [])
+        choices: list[Any] = choices_raw if isinstance(choices_raw, list) else []
+        if choices:
+            message_raw = choices[0].get("message", {}) if isinstance(choices[0], dict) else {}
+            message: dict[str, Any] = message_raw if isinstance(message_raw, dict) else {}
+            msg_annotations_raw = message.get("annotations", [])
+            msg_annotations: list[Any] = msg_annotations_raw if isinstance(msg_annotations_raw, list) else []
+            for ann in msg_annotations:
+                if isinstance(ann, dict) and ann.get("type") == "url_citation":
+                    url_citation = ann.get("url_citation", {})
+                    if url_citation:
                                 annotations.append(
                                     {
                                         "url": url_citation.get("url", ""),
@@ -214,7 +216,8 @@ class PerplexityAdapter:
             else:
                 # Generate a title placeholder (will need enrichment)
                 # Use the last path segment or domain
-                path_parts = parsed_url.path.strip("/").split("/")
+                path = str(parsed_url.path) if parsed_url.path else ""
+                path_parts = path.strip("/").split("/") if path else []
                 title_hint = path_parts[-1] if path_parts else "Unknown"
                 title = title_hint.replace("-", " ").replace("_", " ").title()
                 if len(title) < 5:
@@ -351,7 +354,7 @@ class PerplexityAdapter:
             return []
 
         # Create articles from citations, trying to match with titles
-        articles: list[Article] = []
+        matched_articles: list[Article] = []
         used_urls: set[str] = set()
 
         # First, try to match titles with URLs
@@ -359,7 +362,7 @@ class PerplexityAdapter:
             if url_hint and url_hint in citation_urls:
                 article = self._parse_article_from_url(url_hint, title_override=title)
                 if article:
-                    articles.append(article)
+                    matched_articles.append(article)
                     used_urls.add(url_hint)
             else:
                 # Title without matching URL - create placeholder
@@ -378,16 +381,16 @@ class PerplexityAdapter:
                     open_access=False,
                     citation_count=None,
                 )
-                articles.append(article)
+                matched_articles.append(article)
 
         # Add remaining URLs without titles
         for url in citation_urls:
             if url not in used_urls:
                 article = self._parse_article_from_url(url)
                 if article:
-                    articles.append(article)
+                    matched_articles.append(article)
 
-        return articles
+        return matched_articles
 
     def _do_search(self, query: str, limit: int) -> list[Article]:
         """Internal search method (without timeout wrapper)."""
@@ -424,7 +427,10 @@ Focus on papers that would provide authoritative citations for this claim."""
         articles = self._extract_articles_from_response(response)
 
         # Log the response content for debugging
-        content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
+        choices = response.get("choices", [])
+        choice = choices[0] if choices and isinstance(choices[0], dict) else {}
+        message = choice.get("message", {}) if isinstance(choice, dict) else {}
+        content = message.get("content", "") if isinstance(message, dict) else ""
         logger.debug(f"Perplexity response length: {len(content)} chars")
 
         logger.info(f"Perplexity returned {len(articles)} articles")

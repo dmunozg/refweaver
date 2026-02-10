@@ -7,7 +7,7 @@ as well as other text preprocessing utilities.
 import re
 
 try:
-    from nltk.tokenize import sent_tokenize  # type: ignore[import-untyped]
+    from nltk.tokenize import sent_tokenize
 
     NLTK_AVAILABLE = True
 except ImportError:
@@ -63,7 +63,7 @@ def split_sentences(text: str) -> list[str]:
         raise ImportError(msg)
 
     # Ensure punkt tokenizer is available
-    import nltk  # type: ignore[import-untyped]
+    import nltk
 
     try:
         nltk.data.find("tokenizers/punkt_tab")

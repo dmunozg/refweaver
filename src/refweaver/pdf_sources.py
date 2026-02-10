@@ -108,7 +108,8 @@ def resolve_pdf_via_annas_archive(article: "Article") -> str | None:
         links = soup.find_all("a", href=True)
 
         for link in links:
-            href = link.get("href", "")
+            href_raw = link.get("href")
+            href = str(href_raw) if href_raw is not None else ""
             if "/download/" in href or href.endswith(".pdf"):
                 # Convert relative URL to absolute
                 pdf_url = f"https://annas-archive.org{href}" if href.startswith("/") else href

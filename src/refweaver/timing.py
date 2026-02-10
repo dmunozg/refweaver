@@ -11,7 +11,7 @@ from loguru import logger
 T = TypeVar("T")
 
 
-def timed(func: Callable) -> Callable:
+def timed(func: Callable[..., T]) -> Callable[..., T]:
     """Decorator to log execution time of a function.
 
     Usage:
@@ -33,7 +33,7 @@ def timed(func: Callable) -> Callable:
     return wrapper
 
 
-def timed_info(func: Callable) -> Callable:
+def timed_info(func: Callable[..., T]) -> Callable[..., T]:
     """Decorator to log execution time at INFO level.
 
     Use this for high-level operations you always want to see timing for.
@@ -126,7 +126,7 @@ def run_with_timeout[T](
             ) from _err
 
 
-def timeout(seconds: float):
+def timeout(seconds: float) -> Callable[[Callable[..., T]], Callable[..., T]]:
     """Decorator to add timeout to a function.
 
     Usage:

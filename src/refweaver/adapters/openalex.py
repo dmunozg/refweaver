@@ -3,7 +3,7 @@
 from typing import Any
 
 from loguru import logger
-from pyalex import Works  # type: ignore[import-untyped]
+from pyalex import Works
 from pydantic import HttpUrl
 
 from refweaver.models import Article
