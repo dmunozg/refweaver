@@ -181,6 +181,85 @@ class ExtractedArticleMetadata(BaseModel):
     )
 
 
+class RelevanceScore(BaseModel):
+    """Structured output for article relevance scoring."""
+
+    score: float = Field(
+        ...,
+        description="Relevance score from 0.0 (completely irrelevant) to 1.0 (highly relevant)",
+        ge=0.0,
+        le=1.0,
+    )
+    reasoning: str = Field(
+        ...,
+        description="Brief explanation of why this score was given",
+    )
+    key_matches: list[str] = Field(
+        default_factory=list,
+        description="Key concepts from the sentence that match this article",
+    )
+
+
+class StanceEvaluation(BaseModel):
+    """Structured output for detailed stance evaluation."""
+
+    stance: str = Field(
+        ...,
+        description="Whether the article SUPPORTS, CONTRADICTS, or PARTIALLY_SUPPORTS the sentence",
+        pattern=r"^(SUPPORTS|CONTRADICTS|PARTIALLY_SUPPORTS)$",
+    )
+    confidence: float = Field(
+        ...,
+        description="Confidence in the stance evaluation (0.0 to 1.0)",
+        ge=0.0,
+        le=1.0,
+    )
+    reasoning: str = Field(
+        ...,
+        description="Detailed explanation with specific evidence from the article",
+    )
+    evidence: str | None = Field(
+        None,
+        description="Direct quotes or specific findings that support the stance",
+    )
+    modification: str | None = Field(
+        None,
+        description="Suggested sentence modification if stance is not SUPPORTS",
+    )
+
+
+class FinalSynthesis(BaseModel):
+    """Structured output for final verdict synthesis."""
+
+    verdict: str = Field(
+        ...,
+        description="Overall verdict: WELL_SUPPORTED, PARTIALLY_SUPPORTED, CONTRADICTED, INSUFFICIENT_EVIDENCE, or NOT_SUPPORTED",
+        pattern=r"^(WELL_SUPPORTED|PARTIALLY_SUPPORTED|CONTRADICTED|INSUFFICIENT_EVIDENCE|NOT_SUPPORTED)$",
+    )
+    confidence: float = Field(
+        ...,
+        description="Overall confidence (0.0 to 1.0)",
+        ge=0.0,
+        le=1.0,
+    )
+    primary_sources: list[str] = Field(
+        default_factory=list,
+        description="Titles of the most important sources",
+    )
+    synthesis: str = Field(
+        ...,
+        description="Explanation of how the evidence leads to this verdict",
+    )
+    citation_suggestion: str | None = Field(
+        None,
+        description="Suggested citation if sentence is supported",
+    )
+    rewording_suggestion: str | None = Field(
+        None,
+        description="Suggested rewording if needed",
+    )
+
+
 class LLMClient:
     """Pydantic-ai powered LLM client for RefWeaver with structured output."""
 
@@ -959,3 +1038,252 @@ If abstract or DOI is not found, set the corresponding found flag to false."""
         except Exception as e:
             logger.error(f"Async LLM metadata extraction failed: {e}")
             return {"abstract": None, "doi": None}
+
+    def score_article_relevance(
+        self,
+        sentence: str,
+        article_title: str,
+        article_abstract: str | None,
+    ) -> dict[str, Any]:
+        """Score how relevant an article is to a sentence (Stage 1).
+
+        This is a quick first-pass filter to identify potentially relevant articles
+        before doing detailed stance evaluation.
+
+        Args:
+            sentence: The claim/sentence to evaluate.
+            article_title: Title of the article.
+            article_abstract: Article abstract (may be None).
+
+        Returns:
+            Dict with 'score' (float 0-1), 'reasoning' (str), 'key_matches' (list).
+        """
+        abstract = article_abstract or "[No abstract available]"
+
+        prompt = f"""Rate how relevant this article is to the given sentence/claim.
+
+SENTENCE:
+{sentence}
+
+ARTICLE:
+Title: {article_title}
+Abstract: {abstract[:1500]}
+
+INSTRUCTIONS:
+1. Score relevance from 0.0 (completely irrelevant) to 1.0 (highly relevant)
+2. Consider: Do the main concepts match? Is this the same research area?
+3. 0.0-0.3: Different field or off-topic
+4. 0.3-0.6: Related field but not directly addressing the claim
+5. 0.6-0.8: Relevant to the topic, might provide context
+6. 0.8-1.0: Directly addresses the specific claim
+
+Provide your score and brief reasoning."""
+
+        agent = Agent(
+            model=self._get_model(),
+            system_prompt=(
+                "You are an expert research assistant evaluating article relevance. "
+                "Be objective and consistent in your scoring. Focus on conceptual overlap."
+            ),
+            output_type=RelevanceScore,
+            output_retries=3,
+        )
+
+        try:
+            logger.debug(f"Scoring relevance for: {article_title[:50]}...")
+            response = agent.run_sync(prompt)
+            result = response.output
+
+            logger.debug(f"Relevance score: {result.score:.2f} - {article_title[:50]}...")
+            return {
+                "score": result.score,
+                "reasoning": result.reasoning,
+                "key_matches": result.key_matches,
+            }
+
+        except Exception as e:
+            logger.error(f"Relevance scoring failed: {e}")
+            return {"score": 0.0, "reasoning": f"Error: {e}", "key_matches": []}
+
+    def evaluate_article_stance(
+        self,
+        sentence: str,
+        article_title: str,
+        article_authors: list[str],
+        article_year: int | None,
+        article_abstract: str | None,
+    ) -> dict[str, Any]:
+        """Evaluate detailed stance of an article (Stage 2).
+
+        Only call this for articles that passed the relevance threshold.
+        Determines if the article supports, contradicts, or partially supports
+        the sentence, with detailed reasoning.
+
+        Args:
+            sentence: The claim/sentence to evaluate.
+            article_title: Title of the article.
+            article_authors: List of author names.
+            article_year: Publication year.
+            article_abstract: Article abstract.
+
+        Returns:
+            Dict with 'stance', 'confidence', 'reasoning', 'evidence', 'modification'.
+        """
+        abstract = article_abstract or "[No abstract available]"
+        authors_str = ", ".join(article_authors[:3])
+        if len(article_authors) > 3:
+            authors_str += ", et al."
+        year_str = str(article_year) if article_year else "Unknown"
+
+        prompt = f"""Evaluate how this article relates to the given sentence/claim.
+
+SENTENCE TO EVALUATE:
+{sentence}
+
+ARTICLE:
+Title: {article_title}
+Authors: {authors_str}
+Year: {year_str}
+Abstract: {abstract[:1500]}
+
+INSTRUCTIONS:
+1. Determine if the article SUPPORTS, CONTRADICTS, or PARTIALLY_SUPPORTS the sentence
+2. SUPPORTS: Evidence clearly backs the claim
+3. CONTRADICTS: Evidence clearly contradicts the claim
+4. PARTIALLY_SUPPORTS: Related but with important nuances or conditions
+5. Provide specific evidence from the abstract
+6. If not SUPPORTS, suggest how the sentence should be modified
+
+Be thorough and cite specific evidence."""
+
+        agent = Agent(
+            model=self._get_model(),
+            system_prompt=(
+                "You are an expert scientific reviewer. Carefully evaluate whether "
+                "articles support, contradict, or partially support specific claims. "
+                "Always cite specific evidence and be precise about your reasoning."
+            ),
+            output_type=StanceEvaluation,
+            output_retries=3,
+        )
+
+        try:
+            logger.debug(f"Evaluating stance for: {article_title[:50]}...")
+            response = agent.run_sync(prompt)
+            result = response.output
+
+            logger.info(
+                f"Stance evaluation: {result.stance} (conf: {result.confidence:.2f}) "
+                f"for {article_title[:50]}..."
+            )
+            return {
+                "stance": result.stance,
+                "confidence": result.confidence,
+                "reasoning": result.reasoning,
+                "evidence": result.evidence,
+                "modification": result.modification,
+            }
+
+        except Exception as e:
+            logger.error(f"Stance evaluation failed: {e}")
+            return {
+                "stance": "PARTIALLY_SUPPORTS",
+                "confidence": 0.0,
+                "reasoning": f"Error: {e}",
+                "evidence": None,
+                "modification": None,
+            }
+
+    def synthesize_final_verdict(
+        self,
+        sentence: str,
+        evaluations: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Synthesize final verdict from all article evaluations (Stage 3).
+
+        Takes all the relevant article evaluations and produces an overall
+        assessment of whether the sentence is well-supported by the literature.
+
+        Args:
+            sentence: The original sentence/claim.
+            evaluations: List of evaluation dicts with 'title', 'stance',
+                        'confidence', 'reasoning', etc.
+
+        Returns:
+            Dict with final 'verdict', 'confidence', 'primary_sources',
+            'synthesis', 'citation_suggestion', 'rewording_suggestion'.
+        """
+        # Format evaluations for the prompt
+        eval_texts = []
+        for i, ev in enumerate(evaluations, 1):
+            lines = [
+                f"Article {i}: {ev.get('title', 'Unknown')}",
+                f"  Stance: {ev.get('stance', 'UNKNOWN')} (confidence: {ev.get('confidence', 0):.2f})",
+                f"  Reasoning: {ev.get('reasoning', 'N/A')[:300]}...",
+            ]
+            if ev.get('evidence'):
+                lines.append(f"  Evidence: {ev['evidence'][:200]}...")
+            eval_texts.append("\n".join(lines))
+
+        evaluations_str = "\n\n".join(eval_texts)
+
+        prompt = f"""Synthesize a final verdict for this sentence based on all article evaluations.
+
+SENTENCE:
+{sentence}
+
+ARTICLE EVALUATIONS:
+{evaluations_str}
+
+INSTRUCTIONS:
+1. Consider all the evidence from the evaluated articles
+2. Determine overall verdict:
+   - WELL_SUPPORTED: Strong evidence supports the claim
+   - PARTIALLY_SUPPORTED: Some support but with caveats
+   - CONTRADICTED: Evidence contradicts the claim
+   - INSUFFICIENT_EVIDENCE: Not enough relevant articles found
+   - NOT_SUPPORTED: No supporting evidence found
+3. Identify the primary sources (most relevant, highest confidence)
+4. Explain how the evidence leads to your verdict
+5. Suggest citation format if supported, or rewording if needed
+
+Provide a balanced assessment based on the weight of evidence."""
+
+        agent = Agent(
+            model=self._get_model(),
+            system_prompt=(
+                "You are an expert research synthesizer. Carefully weigh all the "
+                "evidence to provide a well-reasoned final verdict. Be objective "
+                "and acknowledge limitations in the available evidence."
+            ),
+            output_type=FinalSynthesis,
+            output_retries=3,
+        )
+
+        try:
+            logger.debug(f"Synthesizing final verdict for: {sentence[:60]}...")
+            response = agent.run_sync(prompt)
+            result = response.output
+
+            logger.success(
+                f"Final verdict: {result.verdict} (confidence: {result.confidence:.2f})"
+            )
+            return {
+                "verdict": result.verdict,
+                "confidence": result.confidence,
+                "primary_sources": result.primary_sources,
+                "synthesis": result.synthesis,
+                "citation_suggestion": result.citation_suggestion,
+                "rewording_suggestion": result.rewording_suggestion,
+            }
+
+        except Exception as e:
+            logger.error(f"Final synthesis failed: {e}")
+            return {
+                "verdict": "INSUFFICIENT_EVIDENCE",
+                "confidence": 0.0,
+                "primary_sources": [],
+                "synthesis": f"Error during synthesis: {e}",
+                "citation_suggestion": None,
+                "rewording_suggestion": None,
+            }

@@ -1,19 +1,32 @@
 """Sentence analysis pipeline for RefWeaver.
 
 Analyzes sentences from manuscript paragraphs to determine if they need references,
-generates search keywords, and evaluates article relevance.
+generates search keywords, and evaluates article relevance using a three-stage approach:
+
+1. Relevance scoring: Quick filter to identify potentially relevant articles
+2. Stance evaluation: Detailed analysis of how relevant articles relate to the sentence
+3. Final synthesis: Overall verdict based on all evidence
 """
 
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
+from refweaver.evaluation_models import SentenceEvaluation
 from refweaver.llm import LLMClient
 from refweaver.models import Article, Sentence
 from refweaver.text_utils import split_sentences
 
+if TYPE_CHECKING:
+    from refweaver.evaluation_models import FinalVerdict
+
+
+DEFAULT_RELEVANCE_THRESHOLD = 0.5
+DEFAULT_MAX_ARTICLES_FOR_STANCE = 10
+
 
 class SentenceAnalyzer:
-    """Analyzes sentences to determine if they need references."""
+    """Analyzes sentences to determine if they need references and evaluates supporting evidence."""
 
     def __init__(self, llm_client: LLMClient | None = None) -> None:
         """Initialize the sentence analyzer.
@@ -97,255 +110,231 @@ class SentenceAnalyzer:
         # Delegate to LLM client which uses pydantic-ai structured output
         return self.llm.generate_search_keywords(sentence_text)
 
-    async def generate_search_keywords_async(self, sentence: str | Sentence) -> list[str]:
-        """Async version of generate_search_keywords."""
-        sentence_text = sentence.text if isinstance(sentence, Sentence) else sentence
-        return await self.llm.generate_search_keywords_async(sentence_text)
-
-    def evaluate_article_relevance(
+    def evaluate_articles(
         self,
         sentence: str | Sentence,
-        article: Article,
-    ) -> dict[str, str | float | None]:
-        """Evaluate if an article is relevant to support a sentence (abstract only).
+        articles: list[Article],
+        relevance_threshold: float = DEFAULT_RELEVANCE_THRESHOLD,
+        max_articles_for_stance: int = DEFAULT_MAX_ARTICLES_FOR_STANCE,
+    ) -> list[SentenceEvaluation]:
+        """Evaluate all articles for a sentence using three-stage pipeline.
 
-        First-pass evaluation using abstract. Returns a verdict on how the
-        article relates to the claim.
+        Stage 1: Score relevance for all articles (quick filter)
+        Stage 2: Detailed stance evaluation for relevant articles
+        Stage 3: Collect into SentenceEvaluation objects
 
         Args:
-            sentence: The claim needing support (str or Sentence object).
-            article: The candidate article to evaluate.
+            sentence: The sentence/claim to evaluate.
+            articles: List of candidate articles to evaluate.
+            relevance_threshold: Minimum score (0-1) to pass to stage 2.
+            max_articles_for_stance: Max articles to evaluate in detail (by relevance score).
 
         Returns:
-            Dict with 'verdict' (str: SUPPORTS/CONTRADICTS/PARTIALLY_SUPPORTS/
-            INSUFFICIENT_INFO/NOT_RELEVANT), 'confidence' (float), 'reasoning' (str),
-            and 'suggested_modification' (str | None).
+            List of SentenceEvaluation objects, sorted by combined score.
         """
         sentence_text = sentence.text if isinstance(sentence, Sentence) else sentence
 
-        return self.llm.evaluate_article_relevance(
-            sentence=sentence_text,
-            article_title=article.title,
-            article_authors=article.authors,
-            article_year=article.year,
-            article_abstract=article.abstract,
+        logger.info(
+            f"Evaluating {len(articles)} articles for: {sentence_text[:60]}..."
         )
 
-    async def evaluate_article_relevance_async(
-        self,
-        sentence: str | Sentence,
-        article: Article,
-    ) -> dict[str, str | float | None]:
-        """Async version of evaluate_article_relevance (abstract only)."""
-        sentence_text = sentence.text if isinstance(sentence, Sentence) else sentence
+        # Stage 1: Relevance scoring for all articles
+        logger.debug("Stage 1: Scoring relevance for all articles...")
+        evaluations: list[SentenceEvaluation] = []
 
-        return await self.llm.evaluate_article_relevance_async(
-            sentence=sentence_text,
-            article_title=article.title,
-            article_authors=article.authors,
-            article_year=article.year,
-            article_abstract=article.abstract,
-        )
-
-    def evaluate_article_relevance_fulltext(
-        self,
-        sentence: str | Sentence,
-        article: Article,
-        fulltext_content: str,
-    ) -> dict[str, str | float | None]:
-        """Evaluate article relevance using full text (e.g., from PDF).
-
-        This provides a more thorough evaluation when the full PDF is available.
-
-        Args:
-            sentence: The claim needing support.
-            article: The candidate article to evaluate.
-            fulltext_content: Extracted text from the PDF.
-
-        Returns:
-            Dict with 'verdict', 'confidence', 'reasoning', 'suggested_modification'.
-        """
-        sentence_text = sentence.text if isinstance(sentence, Sentence) else sentence
-
-        return self.llm.evaluate_article_relevance_fulltext(
-            sentence=sentence_text,
-            article_title=article.title,
-            article_authors=article.authors,
-            article_year=article.year,
-            fulltext_content=fulltext_content,
-        )
-
-    async def evaluate_article_relevance_fulltext_async(
-        self,
-        sentence: str | Sentence,
-        article: Article,
-        fulltext_content: str,
-    ) -> dict[str, str | float | None]:
-        """Async version of evaluate_article_relevance_fulltext."""
-        sentence_text = sentence.text if isinstance(sentence, Sentence) else sentence
-
-        return await self.llm.evaluate_article_relevance_fulltext_async(
-            sentence=sentence_text,
-            article_title=article.title,
-            article_authors=article.authors,
-            article_year=article.year,
-            fulltext_content=fulltext_content,
-        )
-
-    def evaluate_article_with_landing_page(
-        self,
-        sentence: str | Sentence,
-        article: Article,
-        fetch_fulltext: bool = True,
-        try_alternative_pdf_sources: bool = True,
-        unpaywall_email: str | None = None,
-    ) -> dict[str, str | float | None]:
-        """Multi-pass article evaluation: abstract -> landing page -> PDF.
-
-        Phase 1: Evaluate using abstract
-        Phase 2: If verdict is INSUFFICIENT_INFO/PARTIALLY_SUPPORTS and article
-            is open access, fetch landing page and re-evaluate
-        Phase 3: If still insufficient, try to get PDF (including alternative
-            sources like Unpaywall, Anna's Archive) and re-evaluate
-
-        Args:
-            sentence: The claim needing support (str or Sentence object).
-            article: The candidate article to evaluate.
-            fetch_fulltext: Whether to attempt fetching full text when needed.
-            try_alternative_pdf_sources: Whether to try Unpaywall, Anna's Archive, etc.
-            unpaywall_email: Email for Unpaywall API (optional but recommended).
-
-        Returns:
-            Dict with 'verdict', 'confidence', 'reasoning', 'suggested_modification',
-            and 'evaluation_source' ("abstract", "landing_page", or "pdf").
-        """
-        from refweaver.pdf_extract import try_get_fulltext_from_pdf
-        from refweaver.web_fetch import fetch_article_landing_page
-
-        sentence_text = sentence.text if isinstance(sentence, Sentence) else sentence
-
-        # Phase 1: Evaluate using abstract
-        result = self.llm.evaluate_article_relevance(
-            sentence=sentence_text,
-            article_title=article.title,
-            article_authors=article.authors,
-            article_year=article.year,
-            article_abstract=article.abstract,
-        )
-        result["evaluation_source"] = "abstract"
-
-        if not fetch_fulltext:
-            return result
-
-        verdict = result.get("verdict", "")
-
-        # Phase 2: Try landing page if needed
-        if verdict in ("INSUFFICIENT_INFO", "PARTIALLY_SUPPORTS"):
-            logger.info(
-                f"Verdict is {verdict}, attempting landing page fetch "
-                f"for: {article.title[:50]}..."
+        for article in articles:
+            score_result = self.llm.score_article_relevance(
+                sentence=sentence_text,
+                article_title=article.title,
+                article_abstract=article.abstract,
             )
 
-            landing_page_text = fetch_article_landing_page(article, use_selenium=True)
+            evaluation = SentenceEvaluation(
+                sentence=sentence_text,
+                article_title=article.title,
+                article_doi=article.doi,
+                article_authors=article.authors,
+                article_year=article.year,
+                relevance_score=score_result["score"],
+                relevance_reasoning=score_result["reasoning"],
+                is_relevant=score_result["score"] >= relevance_threshold,
+            )
+            evaluations.append(evaluation)
 
-            if landing_page_text:
-                logger.info(
-                    f"Re-evaluating with landing page content "
-                    f"({len(landing_page_text)} chars)"
-                )
-                result = self.llm.evaluate_article_relevance_fulltext(
+        # Sort by relevance score descending
+        evaluations.sort(key=lambda e: e.relevance_score, reverse=True)
+
+        relevant_count = sum(1 for e in evaluations if e.is_relevant)
+        logger.info(
+            f"Stage 1 complete: {relevant_count}/{len(articles)} articles above "
+            f"threshold ({relevance_threshold})"
+        )
+
+        # Stage 2: Detailed stance evaluation for relevant articles (top N)
+        relevant_evaluations = [e for e in evaluations if e.is_relevant]
+        articles_for_stance = relevant_evaluations[:max_articles_for_stance]
+
+        logger.debug(
+            f"Stage 2: Detailed stance evaluation for {len(articles_for_stance)} articles..."
+        )
+
+        for evaluation in articles_for_stance:
+            # Find the original article to get full metadata
+            article = next(
+                (a for a in articles if a.title == evaluation.article_title),
+                None
+            )
+
+            if article:
+                stance_result = self.llm.evaluate_article_stance(
                     sentence=sentence_text,
                     article_title=article.title,
                     article_authors=article.authors,
                     article_year=article.year,
-                    fulltext_content=landing_page_text,
-                )
-                result["evaluation_source"] = "landing_page"
-                verdict = result.get("verdict", "")
-            else:
-                logger.warning(
-                    f"Could not fetch landing page for: {article.title[:50]}..."
+                    article_abstract=article.abstract,
                 )
 
-        # Phase 3: Try PDF if still needed (including alternative sources)
-        if verdict in ("INSUFFICIENT_INFO", "PARTIALLY_SUPPORTS"):
-            logger.info(
-                f"Verdict still {verdict}, attempting PDF download "
-                f"for: {article.title[:50]}..."
-            )
+                # Update evaluation with stance results
+                evaluation.stance = stance_result["stance"]
+                evaluation.stance_confidence = stance_result["confidence"]
+                evaluation.stance_reasoning = stance_result["reasoning"]
+                evaluation.supporting_evidence = stance_result["evidence"]
+                evaluation.suggested_modification = stance_result["modification"]
 
-            pdf_text = try_get_fulltext_from_pdf(
-                article,
-                try_alternative_sources=try_alternative_pdf_sources,
-                email=unpaywall_email,
-            )
+        logger.info("Stage 2 complete: Stance evaluation finished")
 
-            if pdf_text:
-                logger.info(f"Re-evaluating with PDF content ({len(pdf_text)} chars)")
-                # Limit PDF text to avoid token limits
-                limited_text = pdf_text[:50000]  # ~50k chars should be plenty
-                result = self.llm.evaluate_article_relevance_fulltext(
-                    sentence=sentence_text,
-                    article_title=article.title,
-                    article_authors=article.authors,
-                    article_year=article.year,
-                    fulltext_content=limited_text,
-                )
-                result["evaluation_source"] = "pdf"
-            else:
-                logger.warning(f"Could not download PDF for: {article.title[:50]}...")
+        # Re-sort by combined score (relevance * confidence)
+        evaluations.sort(key=lambda e: e.combined_score, reverse=True)
 
-        return result
+        return evaluations
 
-    async def evaluate_article_with_landing_page_async(
+    def synthesize_verdict(
         self,
         sentence: str | Sentence,
-        article: Article,
-        fetch_fulltext: bool = True,
-    ) -> dict[str, str | float | None]:
-        """Async version of evaluate_article_with_landing_page."""
-        from refweaver.web_fetch import fetch_article_landing_page_async
+        evaluations: list[SentenceEvaluation],
+        min_relevant_articles: int = 1,
+    ) -> "FinalVerdict":
+        """Synthesize final verdict from article evaluations.
+
+        Stage 3: Takes all evaluations and produces an overall assessment
+        of whether the sentence is supported by the literature.
+
+        Args:
+            sentence: The original sentence/claim.
+            evaluations: List of SentenceEvaluation objects from evaluate_articles().
+            min_relevant_articles: Minimum relevant articles needed for a verdict.
+
+        Returns:
+            FinalVerdict with overall assessment and recommendations.
+        """
+        from refweaver.evaluation_models import FinalVerdict
 
         sentence_text = sentence.text if isinstance(sentence, Sentence) else sentence
 
-        # Phase 1: Evaluate using abstract
-        result = await self.llm.evaluate_article_relevance_async(
-            sentence=sentence_text,
-            article_title=article.title,
-            article_authors=article.authors,
-            article_year=article.year,
-            article_abstract=article.abstract,
+        # Filter to only relevant evaluations with stance
+        relevant_with_stance = [
+            e for e in evaluations
+            if e.is_relevant and e.stance is not None
+        ]
+
+        logger.info(
+            f"Synthesizing verdict from {len(relevant_with_stance)} evaluated articles"
         )
-        result["evaluation_source"] = "abstract"
 
-        # Phase 2: If needed and possible, fetch landing page and re-evaluate
-        if fetch_fulltext and article.open_access:
-            verdict = result.get("verdict", "")
-            if verdict in ("INSUFFICIENT_INFO", "PARTIALLY_SUPPORTS"):
-                logger.info(
-                    f"Verdict is {verdict}, attempting async landing page fetch "
-                    f"for: {article.title[:50]}..."
-                )
+        # Check if we have enough evidence
+        if len(relevant_with_stance) < min_relevant_articles:
+            logger.warning(
+                f"Insufficient evidence: {len(relevant_with_stance)} relevant articles, "
+                f"need {min_relevant_articles}"
+            )
+            return FinalVerdict(
+                overall_assessment="INSUFFICIENT_EVIDENCE",
+                confidence=0.0,
+                synthesis=f"Only {len(relevant_with_stance)} relevant articles found. "
+                          f"Need at least {min_relevant_articles} for a reliable verdict.",
+            )
 
-                landing_page_text = await fetch_article_landing_page_async(article)
+        # Prepare evaluation data for LLM
+        eval_data = []
+        for ev in relevant_with_stance:
+            eval_data.append({
+                "title": ev.article_title,
+                "stance": ev.stance,
+                "confidence": ev.stance_confidence or 0.0,
+                "reasoning": ev.stance_reasoning or "",
+                "evidence": ev.supporting_evidence,
+            })
 
-                if landing_page_text:
-                    logger.info(
-                        f"Re-evaluating with landing page content "
-                        f"({len(landing_page_text)} chars)"
-                    )
-                    fulltext_result = await self.llm.evaluate_article_relevance_fulltext_async(
-                        sentence=sentence_text,
-                        article_title=article.title,
-                        article_authors=article.authors,
-                        article_year=article.year,
-                        fulltext_content=landing_page_text,
-                    )
-                    fulltext_result["evaluation_source"] = "fulltext"
-                    return fulltext_result
-                else:
-                    logger.warning(
-                        f"Could not fetch landing page for: {article.title[:50]}..."
-                    )
+        # Get LLM synthesis
+        synthesis_result = self.llm.synthesize_final_verdict(
+            sentence=sentence_text,
+            evaluations=eval_data,
+        )
 
-        return result
+        # Map LLM output to FinalVerdict
+        verdict_mapping = {
+            "WELL_SUPPORTED": "WELL_SUPPORTED",
+            "PARTIALLY_SUPPORTED": "PARTIALLY_SUPPORTED",
+            "CONTRADICTED": "CONTRADICTED",
+            "INSUFFICIENT_EVIDENCE": "INSUFFICIENT_EVIDENCE",
+            "NOT_SUPPORTED": "NOT_SUPPORTED",
+        }
+
+        final_verdict = FinalVerdict(
+            overall_assessment=verdict_mapping.get(
+                synthesis_result["verdict"], "INSUFFICIENT_EVIDENCE"
+            ),
+            confidence=synthesis_result["confidence"],
+            primary_sources=synthesis_result["primary_sources"],
+            synthesis=synthesis_result["synthesis"],
+            suggested_citation=synthesis_result["citation_suggestion"],
+            suggested_rewording=synthesis_result["rewording_suggestion"],
+        )
+
+        logger.success(
+            f"Final verdict: {final_verdict.overall_assessment} "
+            f"(confidence: {final_verdict.confidence:.2f})"
+        )
+
+        return final_verdict
+
+    def analyze_sentence_with_articles(
+        self,
+        sentence: str | Sentence,
+        articles: list[Article],
+        relevance_threshold: float = DEFAULT_RELEVANCE_THRESHOLD,
+        max_articles_for_stance: int = DEFAULT_MAX_ARTICLES_FOR_STANCE,
+        min_relevant_articles: int = 1,
+    ) -> tuple[list[SentenceEvaluation], "FinalVerdict"]:
+        """Complete analysis pipeline: evaluate articles and synthesize verdict.
+
+        Convenience method that runs the full three-stage pipeline:
+        1. Evaluate all articles for relevance and stance
+        2. Synthesize final verdict
+
+        Args:
+            sentence: The sentence/claim to analyze.
+            articles: List of candidate articles.
+            relevance_threshold: Minimum relevance score to pass to stance evaluation.
+            max_articles_for_stance: Max articles for detailed stance evaluation.
+            min_relevant_articles: Minimum articles needed for a verdict.
+
+        Returns:
+            Tuple of (list of SentenceEvaluation, FinalVerdict).
+        """
+        # Stage 1 & 2: Evaluate all articles
+        evaluations = self.evaluate_articles(
+            sentence=sentence,
+            articles=articles,
+            relevance_threshold=relevance_threshold,
+            max_articles_for_stance=max_articles_for_stance,
+        )
+
+        # Stage 3: Synthesize verdict
+        verdict = self.synthesize_verdict(
+            sentence=sentence,
+            evaluations=evaluations,
+            min_relevant_articles=min_relevant_articles,
+        )
+
+        return evaluations, verdict
