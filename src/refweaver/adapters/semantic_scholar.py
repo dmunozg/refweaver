@@ -2,11 +2,14 @@
 
 from typing import Any
 
+from loguru import logger
 from pydantic import HttpUrl
 from semanticscholar import SemanticScholar  # type: ignore[import-untyped]
 
 from refweaver.models import Article
-from refweaver.timing import timed
+from refweaver.timing import run_with_timeout, timed
+
+DEFAULT_SEARCH_TIMEOUT = 15.0  # seconds
 
 
 class SemanticScholarAdapter:
@@ -192,12 +195,27 @@ class SemanticScholarAdapter:
             citation_count=citation_count,
         )
 
+    def _do_search(
+        self,
+        query: str,
+        limit: int,
+        fields: list[str],
+    ) -> list[Article]:
+        """Internal search method (without timeout wrapper)."""
+        results: Any = self.client.search_paper(
+            query=query,
+            limit=limit,
+            fields=fields,
+        )
+        return [self._to_article(paper) for paper in results[:limit]]
+
     @timed
     def search(
         self,
         query: str,
         limit: int = 10,
         fields: list[str] | None = None,
+        timeout: float = DEFAULT_SEARCH_TIMEOUT,
     ) -> list[Article]:
         """Search for papers on Semantic Scholar.
 
@@ -206,9 +224,10 @@ class SemanticScholarAdapter:
             limit: Maximum number of results to return.
             fields: Optional list of fields to retrieve. If None, uses default
                 fields needed for Article conversion.
+            timeout: Maximum time to wait for results (default: 15s).
 
         Returns:
-            List of Article objects.
+            List of Article objects. Empty list if timeout occurs.
         """
         if fields is None:
             # Note: volume, issue, pages, doi are not available in search endpoint
@@ -227,13 +246,15 @@ class SemanticScholarAdapter:
                 "citationCount",
             ]
 
-        results: Any = self.client.search_paper(
-            query=query,
-            limit=limit,
-            fields=fields,
-        )
-
-        return [self._to_article(paper) for paper in results[:limit]]
+        try:
+            return run_with_timeout(
+                self._do_search, timeout, query, limit, fields
+            )
+        except TimeoutError:
+            logger.warning(
+                f"Semantic Scholar search timed out after {timeout}s for query: {query[:50]}..."
+            )
+            return []
 
     def get_paper_by_doi(self, doi: str) -> Article | None:
         """Fetch a paper by its DOI.

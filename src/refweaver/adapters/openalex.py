@@ -2,11 +2,14 @@
 
 from typing import Any
 
+from loguru import logger
 from pyalex import Works  # type: ignore[import-untyped]
 from pydantic import HttpUrl
 
 from refweaver.models import Article
-from refweaver.timing import timed
+from refweaver.timing import run_with_timeout, timed
+
+DEFAULT_SEARCH_TIMEOUT = 15.0  # seconds
 
 
 class OpenAlexAdapter:
@@ -213,21 +216,8 @@ class OpenAlexAdapter:
             citation_count=citation_count,
         )
 
-    @timed
-    def search(
-        self,
-        query: str,
-        limit: int = 10,
-    ) -> list[Article]:
-        """Search for papers on OpenAlex.
-
-        Args:
-            query: Search query string.
-            limit: Maximum number of results to return.
-
-        Returns:
-            List of Article objects.
-        """
+    def _do_search(self, query: str, limit: int) -> list[Article]:
+        """Internal search method (without timeout wrapper)."""
         works = Works().search(query).get(per_page=limit)
 
         articles: list[Article] = []
@@ -240,6 +230,31 @@ class OpenAlexAdapter:
                 continue
 
         return articles
+
+    @timed
+    def search(
+        self,
+        query: str,
+        limit: int = 10,
+        timeout: float = DEFAULT_SEARCH_TIMEOUT,
+    ) -> list[Article]:
+        """Search for papers on OpenAlex.
+
+        Args:
+            query: Search query string.
+            limit: Maximum number of results to return.
+            timeout: Maximum time to wait for results (default: 15s).
+
+        Returns:
+            List of Article objects. Empty list if timeout occurs.
+        """
+        try:
+            return run_with_timeout(self._do_search, timeout, query, limit)
+        except TimeoutError:
+            logger.warning(
+                f"OpenAlex search timed out after {timeout}s for query: {query[:50]}..."
+            )
+            return []
 
     def get_paper_by_doi(self, doi: str) -> Article | None:
         """Fetch a paper by its DOI.

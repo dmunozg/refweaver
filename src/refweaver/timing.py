@@ -2,9 +2,12 @@
 
 import functools
 import time
-from typing import Any, Callable
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
+from typing import Any, Callable, TypeVar
 
 from loguru import logger
+
+T = TypeVar("T")
 
 
 def timed(func: Callable) -> Callable:
@@ -90,3 +93,55 @@ class Timer:
     def elapsed_s(self) -> float:
         """Get elapsed time in seconds."""
         return time.perf_counter() - self.start
+
+
+def run_with_timeout(
+    func: Callable[..., T],
+    timeout_seconds: float,
+    *args: Any,
+    **kwargs: Any,
+) -> T:
+    """Run a function with a timeout.
+
+    Args:
+        func: Function to run.
+        timeout_seconds: Maximum time to wait.
+        *args: Positional arguments for func.
+        **kwargs: Keyword arguments for func.
+
+    Returns:
+        Result of func(*args, **kwargs).
+
+    Raises:
+        TimeoutError: If function takes longer than timeout_seconds.
+    """
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(func, *args, **kwargs)
+        try:
+            return future.result(timeout=timeout_seconds)
+        except TimeoutError:
+            raise TimeoutError(
+                f"Function {func.__qualname__} timed out after {timeout_seconds}s"
+            )
+
+
+def timeout(seconds: float):
+    """Decorator to add timeout to a function.
+
+    Usage:
+        @timeout(15.0)
+        def slow_function():
+            ...
+
+    Args:
+        seconds: Timeout in seconds.
+
+    Returns:
+        Decorated function that raises TimeoutError if exceeded.
+    """
+    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        @functools.wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> T:
+            return run_with_timeout(func, seconds, *args, **kwargs)
+        return wrapper
+    return decorator

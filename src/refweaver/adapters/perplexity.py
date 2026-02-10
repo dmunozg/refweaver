@@ -5,11 +5,12 @@ from datetime import date
 from typing import Any
 
 import requests
-from loguru import logger
 from pydantic import HttpUrl
 
 from refweaver.models import Article
-from refweaver.timing import timed
+from refweaver.timing import run_with_timeout, timed
+
+DEFAULT_SEARCH_TIMEOUT = 30.0  # seconds - Perplexity is slower due to LLM generation
 
 
 class PerplexityAdapter:
@@ -387,26 +388,8 @@ class PerplexityAdapter:
 
         return articles
 
-    @timed
-    def search(
-        self,
-        query: str,
-        limit: int = 10,
-    ) -> list[Article]:
-        """Search for academic papers using Perplexity Sonar.
-
-        Uses a carefully crafted prompt to find relevant papers
-        and returns Article objects. Note: these Articles will
-        need enrichment since Perplexity returns URLs, not
-        full metadata.
-
-        Args:
-            query: Search query string (e.g., claim to find citations for).
-            limit: Maximum number of results to return.
-
-        Returns:
-            List of Article objects (may have incomplete metadata).
-        """
+    def _do_search(self, query: str, limit: int) -> list[Article]:
+        """Internal search method (without timeout wrapper)."""
         system_prompt = """You are an academic research assistant. Your task is to find peer-reviewed scientific papers that are relevant to the user's query.
 
 When responding:
@@ -436,20 +419,45 @@ Focus on papers that would provide authoritative citations for this claim."""
 
         logger.info(f"Searching Perplexity for: '{query[:50]}...' (limit={limit})")
 
+        response = self._make_request(messages)
+        articles = self._extract_articles_from_response(response)
+
+        # Log the response content for debugging
+        content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
+        logger.debug(f"Perplexity response length: {len(content)} chars")
+
+        logger.info(f"Perplexity returned {len(articles)} articles")
+        return articles[:limit]
+
+    @timed
+    def search(
+        self,
+        query: str,
+        limit: int = 10,
+        timeout: float = DEFAULT_SEARCH_TIMEOUT,
+    ) -> list[Article]:
+        """Search for academic papers using Perplexity Sonar.
+
+        Uses a carefully crafted prompt to find relevant papers
+        and returns Article objects. Note: these Articles will
+        need enrichment since Perplexity returns URLs, not
+        full metadata.
+
+        Args:
+            query: Search query string (e.g., claim to find citations for).
+            limit: Maximum number of results to return.
+            timeout: Maximum time to wait for results (default: 30s).
+
+        Returns:
+            List of Article objects (may have incomplete metadata). Empty list if timeout.
+        """
         try:
-            response = self._make_request(messages)
-            articles = self._extract_articles_from_response(response)
-
-            # Log the response content for debugging
-            content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
-            logger.debug(f"Perplexity response length: {len(content)} chars")
-
-            logger.info(f"Perplexity returned {len(articles)} articles")
-            return articles[:limit]
-
-        except requests.RequestException as e:
-            logger.error(f"Perplexity API request failed: {e}")
-            raise
+            return run_with_timeout(self._do_search, timeout, query, limit)
+        except TimeoutError:
+            logger.warning(
+                f"Perplexity search timed out after {timeout}s for query: {query[:50]}..."
+            )
+            return []
         except Exception as e:
             logger.error(f"Unexpected error in Perplexity search: {e}")
             return []
