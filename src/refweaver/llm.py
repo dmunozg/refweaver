@@ -149,6 +149,28 @@ class ExtractedAbstract(BaseModel):
     )
 
 
+class ExtractedArticleMetadata(BaseModel):
+    """Structured output for extracting both abstract and DOI from HTML."""
+
+    abstract: str | None = Field(
+        None,
+        description="The extracted abstract text, or null if not found",
+    )
+    abstract_found: bool = Field(
+        ...,
+        description="Whether an abstract was successfully extracted",
+    )
+    doi: str | None = Field(
+        None,
+        description="The DOI of the article (e.g., '10.1038/s41586-021-03819-2'), or null if not found. "
+                    "Extract only the DOI for THIS article, not DOIs from references.",
+    )
+    doi_found: bool = Field(
+        ...,
+        description="Whether the DOI for THIS article was found (not DOIs from references)",
+    )
+
+
 class LLMClient:
     """Pydantic-ai powered LLM client for RefWeaver with structured output."""
 
@@ -756,3 +778,137 @@ If no abstract is found, set found=false."""
         except Exception as e:
             logger.error(f"Async LLM extraction failed: {e}")
             return None
+
+    def extract_metadata_from_html(
+        self,
+        html_content: str,
+        article_title: str,
+    ) -> dict[str, str | None]:
+        """Extract both abstract and DOI from HTML content using LLM.
+
+        This method uses structured output to extract both the abstract and DOI
+        from academic paper web pages. The LLM is instructed to distinguish
+        between the article's own DOI and DOIs found in references.
+
+        Args:
+            html_content: Cleaned text content from web page(s).
+            article_title: Title of the article for context.
+
+        Returns:
+            Dict with 'abstract' (str | None) and 'doi' (str | None).
+        """
+        prompt = f"""Extract the abstract and DOI from the following web page content.
+
+Article Title: {article_title}
+
+Content:
+{html_content[:12000]}
+
+INSTRUCTIONS:
+1. Extract the abstract of THIS article (the main content, not from references section)
+2. Extract the DOI of THIS article only - look for it near the title, in citation info, or metadata
+3. IMPORTANT: Do NOT extract DOIs from the references/bibliography section at the end
+4. The DOI should start with "10." (e.g., "10.1038/s41586-021-03819-2")
+5. Return only the DOI value, not the full URL
+
+If abstract or DOI is not found, set the corresponding found flag to false."""
+
+        agent = Agent(
+            model=self._get_model(),
+            system_prompt=(
+                "You are a helpful assistant that extracts metadata from academic "
+                "paper web pages. You can identify the article's own DOI vs DOIs "
+                "in the reference list. Return the abstract and DOI if found."
+            ),
+            output_type=ExtractedArticleMetadata,
+            output_retries=3,
+        )
+
+        try:
+            logger.debug(f"Sending metadata extraction request for: {article_title[:50]}...")
+            response = agent.run_sync(prompt)
+            result = response.output
+
+            extracted = {
+                "abstract": result.abstract if result.abstract_found else None,
+                "doi": result.doi if result.doi_found else None,
+            }
+
+            if extracted["abstract"]:
+                logger.info(
+                    f"Successfully extracted abstract ({len(extracted['abstract'])} chars) "
+                    f"for: {article_title[:50]}..."
+                )
+            if extracted["doi"]:
+                logger.info(
+                    f"Successfully extracted DOI ({extracted['doi']}) "
+                    f"for: {article_title[:50]}..."
+                )
+
+            return extracted
+
+        except Exception as e:
+            logger.error(f"LLM metadata extraction failed: {e}")
+            return {"abstract": None, "doi": None}
+
+    async def extract_metadata_from_html_async(
+        self,
+        html_content: str,
+        article_title: str,
+    ) -> dict[str, str | None]:
+        """Async version of extract_metadata_from_html."""
+        prompt = f"""Extract the abstract and DOI from the following web page content.
+
+Article Title: {article_title}
+
+Content:
+{html_content[:12000]}
+
+INSTRUCTIONS:
+1. Extract the abstract of THIS article (the main content, not from references section)
+2. Extract the DOI of THIS article only - look for it near the title, in citation info, or metadata
+3. IMPORTANT: Do NOT extract DOIs from the references/bibliography section at the end
+4. The DOI should start with "10." (e.g., "10.1038/s41586-021-03819-2")
+5. Return only the DOI value, not the full URL
+
+If abstract or DOI is not found, set the corresponding found flag to false."""
+
+        agent = Agent(
+            model=self._get_model(),
+            system_prompt=(
+                "You are a helpful assistant that extracts metadata from academic "
+                "paper web pages. You can identify the article's own DOI vs DOIs "
+                "in the reference list. Return the abstract and DOI if found."
+            ),
+            output_type=ExtractedArticleMetadata,
+            output_retries=3,
+        )
+
+        try:
+            logger.debug(
+                f"Sending metadata extraction request (async) for: {article_title[:50]}..."
+            )
+            response = await agent.run(prompt)
+            result = response.output
+
+            extracted = {
+                "abstract": result.abstract if result.abstract_found else None,
+                "doi": result.doi if result.doi_found else None,
+            }
+
+            if extracted["abstract"]:
+                logger.info(
+                    f"Successfully extracted abstract ({len(extracted['abstract'])} chars) "
+                    f"for: {article_title[:50]}..."
+                )
+            if extracted["doi"]:
+                logger.info(
+                    f"Successfully extracted DOI ({extracted['doi']}) "
+                    f"for: {article_title[:50]}..."
+                )
+
+            return extracted
+
+        except Exception as e:
+            logger.error(f"Async LLM metadata extraction failed: {e}")
+            return {"abstract": None, "doi": None}
