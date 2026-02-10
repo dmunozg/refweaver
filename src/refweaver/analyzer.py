@@ -8,7 +8,7 @@ generates search keywords, and evaluates article relevance using a three-stage a
 3. Final synthesis: Overall verdict based on all evidence
 """
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from loguru import logger
 
@@ -181,7 +181,7 @@ class SentenceAnalyzer:
 
         for evaluation in articles_for_stance:
             # Get the article directly from the evaluation
-            article = evaluation.article
+            article = cast(Article, evaluation.article)
 
             stance_result = self.llm.evaluate_article_stance(
                 sentence=sentence_text,

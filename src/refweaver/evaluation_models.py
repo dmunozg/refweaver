@@ -1,11 +1,6 @@
 """Evaluation models for sentence-article analysis."""
 
-from typing import TYPE_CHECKING
-
 from pydantic import BaseModel, Field
-
-if TYPE_CHECKING:
-    from refweaver.models import Article
 
 
 class ArticleRelevanceScore(BaseModel):
@@ -59,11 +54,14 @@ class SentenceEvaluation(BaseModel):
     """Complete evaluation of an article for a specific sentence.
 
     This model keeps track of the full evaluation pipeline for a single
-    sentence-article pair.
+    sentence-article pair. The article field contains the full Article object,
+    and the other fields are cached metadata for convenience.
     """
 
     sentence: str = Field(..., description="The original sentence being evaluated")
-    article: "Article" = Field(..., description="The full Article object that was evaluated")
+    # Note: article field uses Any to avoid circular import issues with Pydantic v2
+    # The actual type is Article from refweaver.models
+    article: object = Field(..., description="The full Article object that was evaluated")
     article_title: str = Field(..., description="Title of the evaluated article (cached from article)")
     article_doi: str | None = Field(None, description="DOI of the article if available (cached from article)")
     article_authors: list[str] = Field(default_factory=list, description="Article authors (cached from article)")
@@ -204,7 +202,7 @@ class FinalVerdict(BaseModel):
 
         return matched
 
-    def get_primary_articles(self, evaluations: list[SentenceEvaluation]) -> list["Article"]:
+    def get_primary_articles(self, evaluations: list[SentenceEvaluation]) -> list[object]:
         """Get the Article objects for primary sources.
 
         Args:
