@@ -195,10 +195,11 @@ class ArticleEnricher:
                 driver.quit()
 
     def _fetch_html(self, url: str) -> str:
-        """Fetch and clean HTML from a URL with fallback to Selenium.
+        """Fetch and clean HTML from a URL using Selenium.
 
-        First tries requests with browser headers, falls back to Selenium
-        if we get a 403 Forbidden (bot detection).
+        Uses Selenium directly since many publisher sites require JavaScript
+        to render content properly. Plain requests often returns incomplete
+        pages due to JavaScript-based content loading.
 
         Args:
             url: URL to fetch.
@@ -207,36 +208,19 @@ class ArticleEnricher:
             Cleaned text content from the page.
 
         Raises:
-            Exception: If both requests and Selenium fail.
+            Exception: If Selenium fails to fetch the page.
         """
         from bs4 import BeautifulSoup
 
-        html = ""
+        logger.debug(f"Fetching with Selenium: {url}")
 
-        # Strategy 1: Try requests with enhanced headers
+        # Use Selenium directly - many sites need JavaScript
         try:
-            logger.debug(f"Fetching with requests: {url}")
-            html = self._fetch_html_requests(url)
-            logger.debug(f"Requests succeeded: {len(html)} chars")
+            html = self._fetch_html_selenium(url)
+            logger.debug(f"Selenium fetched: {len(html)} chars")
         except Exception as e:
-            # Check if it's a 403 Forbidden
-            is_403 = False
-            if hasattr(e, "response") and e.response is not None:
-                is_403 = getattr(e.response, "status_code", None) == 403
-
-            if is_403:
-                logger.warning(f"Got 403 from {url}, falling back to Selenium")
-            else:
-                logger.debug(f"Requests failed ({e}), trying Selenium")
-
-            # Strategy 2: Fall back to Selenium
-            try:
-                html = self._fetch_html_selenium(url)
-            except Exception as selenium_error:
-                logger.error(f"Selenium also failed: {selenium_error}")
-                raise Exception(
-                    f"Failed to fetch {url}: requests failed ({e}), Selenium failed ({selenium_error})"
-                ) from selenium_error
+            logger.error(f"Selenium failed to fetch {url}: {e}")
+            raise
 
         # Parse HTML and extract text
         soup = BeautifulSoup(html, "html.parser")

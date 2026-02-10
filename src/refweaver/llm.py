@@ -169,6 +169,16 @@ class ExtractedArticleMetadata(BaseModel):
         ...,
         description="Whether the DOI for THIS article was found (not DOIs from references)",
     )
+    generated_summary: str | None = Field(
+        None,
+        description="If no abstract was found, generate a concise summary (2-4 sentences) "
+                    "including: research question/objective, methods used, and main findings. "
+                    "This should capture the essence of the paper even without an explicit abstract.",
+    )
+    used_generated_summary: bool = Field(
+        default=False,
+        description="Whether the generated summary is being used as the abstract",
+    )
 
 
 class LLMClient:
@@ -784,18 +794,21 @@ If no abstract is found, set found=false."""
         html_content: str,
         article_title: str,
     ) -> dict[str, str | None]:
-        """Extract both abstract and DOI from HTML content using LLM.
+        """Extract abstract, DOI, and generate summary from HTML content using LLM.
 
         This method uses structured output to extract both the abstract and DOI
         from academic paper web pages. The LLM is instructed to distinguish
         between the article's own DOI and DOIs found in references.
+
+        If no explicit abstract is found, the LLM generates a concise summary
+        including methods and main findings.
 
         Args:
             html_content: Cleaned text content from web page(s).
             article_title: Title of the article for context.
 
         Returns:
-            Dict with 'abstract' (str | None) and 'doi' (str | None).
+            Dict with 'abstract' (str | None), 'doi' (str | None).
         """
         prompt = f"""Extract the abstract and DOI from the following web page content.
 
@@ -806,10 +819,15 @@ Content:
 
 INSTRUCTIONS:
 1. Extract the abstract of THIS article (the main content, not from references section)
-2. Extract the DOI of THIS article only - look for it near the title, in citation info, or metadata
-3. IMPORTANT: Do NOT extract DOIs from the references/bibliography section at the end
-4. The DOI should start with "10." (e.g., "10.1038/s41586-021-03819-2")
-5. Return only the DOI value, not the full URL
+2. If NO explicit abstract is found, generate a concise summary (2-4 sentences) that includes:
+   - The research question or objective
+   - The methods used
+   - The main findings or conclusions
+   Set used_generated_summary=true and put this in generated_summary field
+3. Extract the DOI of THIS article only - look for it near the title, in citation info, or metadata
+4. IMPORTANT: Do NOT extract DOIs from the references/bibliography section at the end
+5. The DOI should start with "10." (e.g., "10.1038/s41586-021-03819-2")
+6. Return only the DOI value, not the full URL
 
 If abstract or DOI is not found, set the corresponding found flag to false."""
 
@@ -818,7 +836,8 @@ If abstract or DOI is not found, set the corresponding found flag to false."""
             system_prompt=(
                 "You are a helpful assistant that extracts metadata from academic "
                 "paper web pages. You can identify the article's own DOI vs DOIs "
-                "in the reference list. Return the abstract and DOI if found."
+                "in the reference list. If no abstract is found, you can generate "
+                "a concise summary based on the paper's content."
             ),
             output_type=ExtractedArticleMetadata,
             output_retries=3,
@@ -829,14 +848,25 @@ If abstract or DOI is not found, set the corresponding found flag to false."""
             response = agent.run_sync(prompt)
             result = response.output
 
+            # Determine abstract: use explicit abstract or generated summary
+            abstract = None
+            if result.abstract_found and result.abstract:
+                abstract = result.abstract
+            elif result.used_generated_summary and result.generated_summary:
+                abstract = result.generated_summary
+                logger.info(
+                    f"Using generated summary as abstract ({len(abstract)} chars) "
+                    f"for: {article_title[:50]}..."
+                )
+
             extracted = {
-                "abstract": result.abstract if result.abstract_found else None,
+                "abstract": abstract,
                 "doi": result.doi if result.doi_found else None,
             }
 
-            if extracted["abstract"]:
+            if result.abstract_found and result.abstract:
                 logger.info(
-                    f"Successfully extracted abstract ({len(extracted['abstract'])} chars) "
+                    f"Successfully extracted abstract ({len(result.abstract)} chars) "
                     f"for: {article_title[:50]}..."
                 )
             if extracted["doi"]:
@@ -866,10 +896,15 @@ Content:
 
 INSTRUCTIONS:
 1. Extract the abstract of THIS article (the main content, not from references section)
-2. Extract the DOI of THIS article only - look for it near the title, in citation info, or metadata
-3. IMPORTANT: Do NOT extract DOIs from the references/bibliography section at the end
-4. The DOI should start with "10." (e.g., "10.1038/s41586-021-03819-2")
-5. Return only the DOI value, not the full URL
+2. If NO explicit abstract is found, generate a concise summary (2-4 sentences) that includes:
+   - The research question or objective
+   - The methods used
+   - The main findings or conclusions
+   Set used_generated_summary=true and put this in generated_summary field
+3. Extract the DOI of THIS article only - look for it near the title, in citation info, or metadata
+4. IMPORTANT: Do NOT extract DOIs from the references/bibliography section at the end
+5. The DOI should start with "10." (e.g., "10.1038/s41586-021-03819-2")
+6. Return only the DOI value, not the full URL
 
 If abstract or DOI is not found, set the corresponding found flag to false."""
 
@@ -878,7 +913,8 @@ If abstract or DOI is not found, set the corresponding found flag to false."""
             system_prompt=(
                 "You are a helpful assistant that extracts metadata from academic "
                 "paper web pages. You can identify the article's own DOI vs DOIs "
-                "in the reference list. Return the abstract and DOI if found."
+                "in the reference list. If no abstract is found, you can generate "
+                "a concise summary based on the paper's content."
             ),
             output_type=ExtractedArticleMetadata,
             output_retries=3,
@@ -891,14 +927,25 @@ If abstract or DOI is not found, set the corresponding found flag to false."""
             response = await agent.run(prompt)
             result = response.output
 
+            # Determine abstract: use explicit abstract or generated summary
+            abstract = None
+            if result.abstract_found and result.abstract:
+                abstract = result.abstract
+            elif result.used_generated_summary and result.generated_summary:
+                abstract = result.generated_summary
+                logger.info(
+                    f"Using generated summary as abstract ({len(abstract)} chars) "
+                    f"for: {article_title[:50]}..."
+                )
+
             extracted = {
-                "abstract": result.abstract if result.abstract_found else None,
+                "abstract": abstract,
                 "doi": result.doi if result.doi_found else None,
             }
 
-            if extracted["abstract"]:
+            if result.abstract_found and result.abstract:
                 logger.info(
-                    f"Successfully extracted abstract ({len(extracted['abstract'])} chars) "
+                    f"Successfully extracted abstract ({len(result.abstract)} chars) "
                     f"for: {article_title[:50]}..."
                 )
             if extracted["doi"]:
