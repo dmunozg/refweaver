@@ -151,6 +151,7 @@ class SentenceAnalyzer:
 
             evaluation = SentenceEvaluation(
                 sentence=sentence_text,
+                article=article,
                 article_title=article.title,
                 article_doi=article.doi,
                 article_authors=article.authors,
@@ -179,27 +180,23 @@ class SentenceAnalyzer:
         )
 
         for evaluation in articles_for_stance:
-            # Find the original article to get full metadata
-            article = next(
-                (a for a in articles if a.title == evaluation.article_title),
-                None
+            # Get the article directly from the evaluation
+            article = evaluation.article
+
+            stance_result = self.llm.evaluate_article_stance(
+                sentence=sentence_text,
+                article_title=article.title,
+                article_authors=article.authors,
+                article_year=article.year,
+                article_abstract=article.abstract,
             )
 
-            if article:
-                stance_result = self.llm.evaluate_article_stance(
-                    sentence=sentence_text,
-                    article_title=article.title,
-                    article_authors=article.authors,
-                    article_year=article.year,
-                    article_abstract=article.abstract,
-                )
-
-                # Update evaluation with stance results
-                evaluation.stance = stance_result["stance"]
-                evaluation.stance_confidence = stance_result["confidence"]
-                evaluation.stance_reasoning = stance_result["reasoning"]
-                evaluation.supporting_evidence = stance_result["evidence"]
-                evaluation.suggested_modification = stance_result["modification"]
+            # Update evaluation with stance results
+            evaluation.stance = stance_result["stance"]
+            evaluation.stance_confidence = stance_result["confidence"]
+            evaluation.stance_reasoning = stance_result["reasoning"]
+            evaluation.supporting_evidence = stance_result["evidence"]
+            evaluation.suggested_modification = stance_result["modification"]
 
         logger.info("Stage 2 complete: Stance evaluation finished")
 
@@ -254,11 +251,13 @@ class SentenceAnalyzer:
                           f"Need at least {min_relevant_articles} for a reliable verdict.",
             )
 
-        # Prepare evaluation data for LLM
+        # Prepare evaluation data for LLM (include index for matching back)
         eval_data = []
-        for ev in relevant_with_stance:
+        for idx, ev in enumerate(relevant_with_stance):
             eval_data.append({
+                "index": idx,
                 "title": ev.article_title,
+                "doi": ev.article_doi,
                 "stance": ev.stance,
                 "confidence": ev.stance_confidence or 0.0,
                 "reasoning": ev.stance_reasoning or "",
@@ -280,12 +279,30 @@ class SentenceAnalyzer:
             "NOT_SUPPORTED": "NOT_SUPPORTED",
         }
 
+        # Build primary_source_identifiers from LLM output
+        from refweaver.evaluation_models import SourceIdentifier
+
+        primary_source_identifiers: list[SourceIdentifier] = []
+        for source_title in synthesis_result.get("primary_sources", []):
+            # Find matching evaluation by title
+            for idx, ev in enumerate(relevant_with_stance):
+                if ev.article_title == source_title or source_title in ev.article_title:
+                    primary_source_identifiers.append(
+                        SourceIdentifier(
+                            title=ev.article_title,
+                            doi=ev.article_doi,
+                            index=idx,
+                        )
+                    )
+                    break
+
         final_verdict = FinalVerdict(
             overall_assessment=verdict_mapping.get(
                 synthesis_result["verdict"], "INSUFFICIENT_EVIDENCE"
             ),
             confidence=synthesis_result["confidence"],
             primary_sources=synthesis_result["primary_sources"],
+            primary_source_identifiers=primary_source_identifiers,
             synthesis=synthesis_result["synthesis"],
             suggested_citation=synthesis_result["citation_suggestion"],
             suggested_rewording=synthesis_result["rewording_suggestion"],

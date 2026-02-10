@@ -1,6 +1,11 @@
 """Evaluation models for sentence-article analysis."""
 
+from typing import TYPE_CHECKING
+
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from refweaver.models import Article
 
 
 class ArticleRelevanceScore(BaseModel):
@@ -58,10 +63,11 @@ class SentenceEvaluation(BaseModel):
     """
 
     sentence: str = Field(..., description="The original sentence being evaluated")
-    article_title: str = Field(..., description="Title of the evaluated article")
-    article_doi: str | None = Field(None, description="DOI of the article if available")
-    article_authors: list[str] = Field(default_factory=list, description="Article authors")
-    article_year: int | None = Field(None, description="Publication year")
+    article: "Article" = Field(..., description="The full Article object that was evaluated")
+    article_title: str = Field(..., description="Title of the evaluated article (cached from article)")
+    article_doi: str | None = Field(None, description="DOI of the article if available (cached from article)")
+    article_authors: list[str] = Field(default_factory=list, description="Article authors (cached from article)")
+    article_year: int | None = Field(None, description="Publication year (cached from article)")
 
     # Stage 1: Relevance scoring
     relevance_score: float = Field(
@@ -127,6 +133,14 @@ class SentenceEvaluation(BaseModel):
         return "\n".join(lines)
 
 
+class SourceIdentifier(BaseModel):
+    """Identifier for a source article to enable matching back to evaluations."""
+
+    title: str = Field(..., description="Full title of the article")
+    doi: str | None = Field(None, description="DOI if available (most reliable identifier)")
+    index: int = Field(..., description="Original index in the evaluations list")
+
+
 class FinalVerdict(BaseModel):
     """Final verdict synthesizing all evaluations."""
 
@@ -143,7 +157,11 @@ class FinalVerdict(BaseModel):
     )
     primary_sources: list[str] = Field(
         default_factory=list,
-        description="Titles of the primary supporting/contradicting sources",
+        description="Titles of the primary supporting/contradicting sources (for display)",
+    )
+    primary_source_identifiers: list[SourceIdentifier] = Field(
+        default_factory=list,
+        description="Identifiers for primary sources to enable matching back to Article objects",
     )
     synthesis: str = Field(
         ...,
@@ -157,3 +175,45 @@ class FinalVerdict(BaseModel):
         None,
         description="Suggested rewording if sentence needs modification",
     )
+
+    def get_primary_evaluations(
+        self, evaluations: list[SentenceEvaluation]
+    ) -> list[SentenceEvaluation]:
+        """Get the full SentenceEvaluation objects for primary sources.
+
+        Args:
+            evaluations: The full list of evaluations from which to find matches.
+
+        Returns:
+            List of SentenceEvaluation objects matching the primary sources.
+        """
+        matched: list[SentenceEvaluation] = []
+
+        for identifier in self.primary_source_identifiers:
+            # Try to match by DOI first (most reliable), then by title
+            for ev in evaluations:
+                if identifier.doi and ev.article_doi == identifier.doi:
+                    matched.append(ev)
+                    break
+                elif ev.article_title == identifier.title:
+                    matched.append(ev)
+                    break
+            else:
+                # Fallback: try fuzzy match on title if exact match fails
+                for ev in evaluations:
+                    if identifier.title in ev.article_title or ev.article_title in identifier.title:
+                        matched.append(ev)
+                        break
+
+        return matched
+
+    def get_primary_articles(self, evaluations: list[SentenceEvaluation]) -> list["Article"]:
+        """Get the Article objects for primary sources.
+
+        Args:
+            evaluations: The full list of evaluations from which to find matches.
+
+        Returns:
+            List of Article objects matching the primary sources.
+        """
+        return [ev.article for ev in self.get_primary_evaluations(evaluations)]
