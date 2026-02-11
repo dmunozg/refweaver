@@ -22,6 +22,7 @@ def timed(func: Callable[..., T]) -> Callable[..., T]:
     Logs:
         DEBUG: Function name and execution time in ms
     """
+
     @functools.wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         start = time.perf_counter()
@@ -30,6 +31,7 @@ def timed(func: Callable[..., T]) -> Callable[..., T]:
         finally:
             elapsed = (time.perf_counter() - start) * 1000
             logger.debug(f"⏱ {func.__qualname__} took {elapsed:.1f}ms")
+
     return wrapper
 
 
@@ -46,6 +48,7 @@ def timed_info(func: Callable[..., T]) -> Callable[..., T]:
     Logs:
         INFO: Function name and execution time
     """
+
     @functools.wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         start = time.perf_counter()
@@ -54,6 +57,7 @@ def timed_info(func: Callable[..., T]) -> Callable[..., T]:
         finally:
             elapsed = time.perf_counter() - start
             logger.info(f"⏱ {func.__qualname__} took {elapsed:.2f}s")
+
     return wrapper
 
 
@@ -116,14 +120,21 @@ def run_with_timeout[T](
     Raises:
         TimeoutError: If function takes longer than timeout_seconds.
     """
-    with ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(func, *args, **kwargs)
-        try:
-            return future.result(timeout=timeout_seconds)
-        except TimeoutError as _err:
-            raise TimeoutError(
-                f"Function {func.__qualname__} timed out after {timeout_seconds}s"
-            ) from _err
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(func, *args, **kwargs)
+    timed_out = False
+    try:
+        return future.result(timeout=timeout_seconds)
+    except TimeoutError as _err:
+        timed_out = True
+        future.cancel()
+        executor.shutdown(wait=False, cancel_futures=True)
+        raise TimeoutError(
+            f"Function {func.__qualname__} timed out after {timeout_seconds}s"
+        ) from _err
+    finally:
+        if not timed_out:
+            executor.shutdown(wait=True)
 
 
 def timeout(seconds: float) -> Callable[[Callable[..., T]], Callable[..., T]]:
@@ -140,9 +151,12 @@ def timeout(seconds: float) -> Callable[[Callable[..., T]], Callable[..., T]]:
     Returns:
         Decorated function that raises TimeoutError if exceeded.
     """
+
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> T:
             return run_with_timeout(func, seconds, *args, **kwargs)
+
         return wrapper
+
     return decorator
