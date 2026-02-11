@@ -1,5 +1,6 @@
 """Unified search across multiple academic search engines."""
 
+import os
 import warnings
 from typing import Any
 
@@ -13,6 +14,19 @@ from refweaver.models import Article
 from refweaver.timing import timed_info
 
 DEFAULT_LIMIT_PER_SOURCE = 5
+
+
+def _env_flag(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return default
 
 
 class UnifiedSearch:
@@ -47,7 +61,19 @@ class UnifiedSearch:
             api_key=semantic_scholar_api_key
         )
         self.openalex: OpenAlexAdapter = OpenAlexAdapter(api_key=openalex_email)
-        self.google_scholar: GoogleScholarAdapter = GoogleScholarAdapter(use_proxy=use_scholarly_proxy)
+        self.google_scholar: GoogleScholarAdapter = GoogleScholarAdapter(
+            use_proxy=use_scholarly_proxy
+        )
+
+        self._use_semantic_scholar_default = _env_flag(
+            "REFWEAVER_USE_SEMANTIC_SCHOLAR",
+            True,
+        )
+        self._use_openalex_default = _env_flag("REFWEAVER_USE_OPENALEX", True)
+        self._use_google_scholar_default = _env_flag(
+            "REFWEAVER_USE_GOOGLE_SCHOLAR",
+            True,
+        )
 
         logger.info("UnifiedSearch initialized with all adapters")
 
@@ -57,9 +83,9 @@ class UnifiedSearch:
         query: str,
         limit: int | None = None,
         limit_per_source: int = DEFAULT_LIMIT_PER_SOURCE,
-        use_semantic_scholar: bool = True,
-        use_openalex: bool = True,
-        use_google_scholar: bool = True,
+        use_semantic_scholar: bool | None = None,
+        use_openalex: bool | None = None,
+        use_google_scholar: bool | None = None,
         deduplicate: bool = True,
         title_threshold: float = 0.85,
         author_threshold: float = 0.5,
@@ -93,15 +119,31 @@ class UnifiedSearch:
 
         Note:
             For semantic/claim-based search, use PerplexityAdapter directly.
+            Defaults can be controlled by env vars: REFWEAVER_USE_SEMANTIC_SCHOLAR,
+            REFWEAVER_USE_OPENALEX, REFWEAVER_USE_GOOGLE_SCHOLAR.
         """
         all_articles: list[Article] = []
         failed_sources: list[str] = []
         successful_sources: list[str] = []
 
+        resolved_use_semantic_scholar = (
+            self._use_semantic_scholar_default
+            if use_semantic_scholar is None
+            else use_semantic_scholar
+        )
+        resolved_use_openalex = self._use_openalex_default if use_openalex is None else use_openalex
+        resolved_use_google_scholar = (
+            self._use_google_scholar_default if use_google_scholar is None else use_google_scholar
+        )
+
         sources: list[tuple[str, bool, Any]] = [
-            ("Semantic Scholar", use_semantic_scholar, self.semantic_scholar),
-            ("OpenAlex", use_openalex, self.openalex),
-            ("Google Scholar", use_google_scholar, self.google_scholar),
+            (
+                "Semantic Scholar",
+                resolved_use_semantic_scholar,
+                self.semantic_scholar,
+            ),
+            ("OpenAlex", resolved_use_openalex, self.openalex),
+            ("Google Scholar", resolved_use_google_scholar, self.google_scholar),
         ]
 
         logger.info(
@@ -119,9 +161,7 @@ class UnifiedSearch:
                 articles = adapter.search(query, limit=limit_per_source)
 
                 if articles:
-                    logger.info(
-                        f"{source_name} returned {len(articles)} articles"
-                    )
+                    logger.info(f"{source_name} returned {len(articles)} articles")
                     all_articles.extend(articles)
                     successful_sources.append(source_name)
                 else:
@@ -200,8 +240,7 @@ class UnifiedSearch:
 
         if source not in source_map:
             raise ValueError(
-                f"Invalid source: {source}. "
-                f"Must be one of: {', '.join(source_map.keys())}"
+                f"Invalid source: {source}. Must be one of: {', '.join(source_map.keys())}"
             )
 
         adapter, source_name = source_map[source]

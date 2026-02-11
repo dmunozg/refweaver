@@ -301,13 +301,18 @@ class LLMClient:
             )
         return self._model
 
-    def generate_search_keywords(self, sentence: str) -> list[str]:
+    def generate_search_keywords(
+        self,
+        sentence: str,
+        context: str | None = None,
+    ) -> list[str]:
         """Generate search keywords for finding supporting articles.
 
         Uses structured output to extract key concepts from a sentence.
 
         Args:
             sentence: The sentence needing reference support.
+            context: Optional surrounding context to disambiguate the sentence.
 
         Returns:
             List of search keyword strings.
@@ -324,9 +329,11 @@ class LLMClient:
             output_retries=3,
         )
 
+        context_block = f"\nContext: {context}" if context else ""
+        prompt = f"Sentence: {sentence}{context_block}"
         try:
             logger.debug(f"Generating keywords for: {sentence[:60]}...")
-            response = agent.run_sync(sentence)
+            response = agent.run_sync(prompt)
             keywords = response.output.keywords
             logger.info(f"Generated {len(keywords)} keywords: {keywords}")
             return keywords
@@ -334,7 +341,11 @@ class LLMClient:
             logger.error(f"Keyword generation failed: {e}")
             return [sentence[:100]]  # Fallback
 
-    async def generate_search_keywords_async(self, sentence: str) -> list[str]:
+    async def generate_search_keywords_async(
+        self,
+        sentence: str,
+        context: str | None = None,
+    ) -> list[str]:
         """Async version of generate_search_keywords."""
         agent = Agent(
             model=self._get_model(),
@@ -348,9 +359,11 @@ class LLMClient:
             output_retries=3,
         )
 
+        context_block = f"\nContext: {context}" if context else ""
+        prompt = f"Sentence: {sentence}{context_block}"
         try:
             logger.debug(f"Generating keywords (async) for: {sentence[:60]}...")
-            response = await agent.run(sentence)
+            response = await agent.run(prompt)
             keywords = response.output.keywords
             logger.info(f"Generated {len(keywords)} keywords: {keywords}")
             return keywords

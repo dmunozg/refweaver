@@ -91,7 +91,11 @@ class SentenceAnalyzer:
         logger.info(f"Analyzed {len(all_sentences)} sentences total")
         return all_sentences
 
-    def generate_search_keywords(self, sentence: str | Sentence) -> list[str]:
+    def generate_search_keywords(
+        self,
+        sentence: str | Sentence,
+        context: str | None = None,
+    ) -> list[str]:
         """Generate search keywords for finding supporting articles.
 
         Uses LLM with structured output to extract key concepts and terms
@@ -99,6 +103,7 @@ class SentenceAnalyzer:
 
         Args:
             sentence: The sentence needing reference support (str or Sentence object).
+            context: Optional surrounding context to disambiguate the sentence.
 
         Returns:
             List of search keyword strings optimized for academic search.
@@ -107,7 +112,7 @@ class SentenceAnalyzer:
         sentence_text = sentence.text if isinstance(sentence, Sentence) else sentence
 
         # Delegate to LLM client which uses pydantic-ai structured output
-        return self.llm.generate_search_keywords(sentence_text)
+        return self.llm.generate_search_keywords(sentence_text, context=context)
 
     def evaluate_articles(
         self,

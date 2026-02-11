@@ -4,6 +4,7 @@ This module extends the base UnifiedSearch to include Perplexity
 as a fallback tier when primary academic sources return few results.
 """
 
+import os
 import warnings
 from typing import Any
 
@@ -15,6 +16,19 @@ from refweaver.adapters.scholarly import GoogleScholarAdapter
 from refweaver.adapters.semantic_scholar import SemanticScholarAdapter
 from refweaver.dedup import deduplicate_articles
 from refweaver.models import Article
+
+
+def _env_flag(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return default
 
 
 class UnifiedSearchWithFallback:
@@ -48,9 +62,7 @@ class UnifiedSearchWithFallback:
                                           before triggering Perplexity fallback.
         """
         # Primary adapters
-        self.semantic_scholar = SemanticScholarAdapter(
-            api_key=semantic_scholar_api_key
-        )
+        self.semantic_scholar = SemanticScholarAdapter(api_key=semantic_scholar_api_key)
         self.openalex = OpenAlexAdapter(api_key=openalex_email)
         self.google_scholar = GoogleScholarAdapter(use_proxy=use_scholarly_proxy)
 
@@ -59,6 +71,20 @@ class UnifiedSearchWithFallback:
         self._openrouter_api_key = openrouter_api_key
         self._perplexity_model = perplexity_model
         self.perplexity_fallback_threshold = perplexity_fallback_threshold
+
+        self._use_semantic_scholar_default = _env_flag(
+            "REFWEAVER_USE_SEMANTIC_SCHOLAR",
+            True,
+        )
+        self._use_openalex_default = _env_flag("REFWEAVER_USE_OPENALEX", True)
+        self._use_google_scholar_default = _env_flag(
+            "REFWEAVER_USE_GOOGLE_SCHOLAR",
+            True,
+        )
+        self._use_perplexity_default = _env_flag(
+            "REFWEAVER_USE_PERPLEXITY",
+            True,
+        )
 
         logger.info(
             f"UnifiedSearchWithFallback initialized "
@@ -79,10 +105,10 @@ class UnifiedSearchWithFallback:
         query: str,
         limit: int = 10,
         limit_per_source: int | None = None,
-        use_semantic_scholar: bool = True,
-        use_openalex: bool = True,
-        use_google_scholar: bool = True,
-        use_perplexity_fallback: bool = True,
+        use_semantic_scholar: bool | None = None,
+        use_openalex: bool | None = None,
+        use_google_scholar: bool | None = None,
+        use_perplexity_fallback: bool | None = None,
         deduplicate: bool = True,
         title_threshold: float = 0.85,
         author_threshold: float = 0.5,
@@ -103,6 +129,10 @@ class UnifiedSearchWithFallback:
 
         Returns:
             List of Article objects from all sources.
+
+        Note:
+            Defaults can be controlled by env vars: REFWEAVER_USE_SEMANTIC_SCHOLAR,
+            REFWEAVER_USE_OPENALEX, REFWEAVER_USE_GOOGLE_SCHOLAR, REFWEAVER_USE_PERPLEXITY.
         """
         if limit_per_source is None:
             limit_per_source = limit
@@ -112,10 +142,29 @@ class UnifiedSearchWithFallback:
         successful_sources: list[str] = []
 
         # Phase 1: Search primary sources
+        resolved_use_semantic_scholar = (
+            self._use_semantic_scholar_default
+            if use_semantic_scholar is None
+            else use_semantic_scholar
+        )
+        resolved_use_openalex = self._use_openalex_default if use_openalex is None else use_openalex
+        resolved_use_google_scholar = (
+            self._use_google_scholar_default if use_google_scholar is None else use_google_scholar
+        )
+        resolved_use_perplexity = (
+            self._use_perplexity_default
+            if use_perplexity_fallback is None
+            else use_perplexity_fallback
+        )
+
         sources: list[tuple[str, bool, Any]] = [
-            ("Semantic Scholar", use_semantic_scholar, self.semantic_scholar),
-            ("OpenAlex", use_openalex, self.openalex),
-            ("Google Scholar", use_google_scholar, self.google_scholar),
+            (
+                "Semantic Scholar",
+                resolved_use_semantic_scholar,
+                self.semantic_scholar,
+            ),
+            ("OpenAlex", resolved_use_openalex, self.openalex),
+            ("Google Scholar", resolved_use_google_scholar, self.google_scholar),
         ]
 
         logger.info(
@@ -145,10 +194,7 @@ class UnifiedSearchWithFallback:
 
         # Phase 2: Perplexity fallback if needed
         primary_count = len(all_articles)
-        if (
-            use_perplexity_fallback
-            and primary_count < self.perplexity_fallback_threshold
-        ):
+        if resolved_use_perplexity and primary_count < self.perplexity_fallback_threshold:
             logger.info(
                 f"Primary sources returned only {primary_count} articles "
                 f"(threshold: {self.perplexity_fallback_threshold}), "
