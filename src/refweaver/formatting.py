@@ -4,6 +4,8 @@ Provides convenient ways to display lists of Pydantic models as tables
 in Jupyter notebooks or terminal output.
 """
 
+import hashlib
+import json
 from typing import Any
 
 from loguru import logger
@@ -39,7 +41,7 @@ def articles_to_table(
             if col == "title" and value:
                 title = str(value)
                 if len(title) > max_title_length:
-                    title = title[:max_title_length - 3] + "..."
+                    title = title[: max_title_length - 3] + "..."
                 row[col] = title
             elif col == "authors" and value:
                 authors = value if isinstance(value, list) else [value]
@@ -88,9 +90,7 @@ def _simple_table_format(rows: list[dict[str, Any]], columns: list[str]) -> str:
 
     # Rows
     for row in rows:
-        line = " | ".join(
-            str(row.get(col, "-")).ljust(widths[col]) for col in columns
-        )
+        line = " | ".join(str(row.get(col, "-")).ljust(widths[col]) for col in columns)
         lines.append(line)
 
     return "\n".join(lines)
@@ -112,8 +112,7 @@ def articles_to_pandas(articles: list[Any]) -> Any:
         import pandas as pd
     except ImportError as e:
         raise ImportError(
-            "pandas is required for articles_to_pandas. "
-            "Install with: pip install pandas"
+            "pandas is required for articles_to_pandas. Install with: pip install pandas"
         ) from e
 
     if not articles:
@@ -141,8 +140,14 @@ def articles_to_pandas(articles: list[Any]) -> Any:
 
     # Select and reorder useful columns
     preferred_cols = [
-        "title", "authors", "year", "journal", "doi",
-        "open_access", "citation_count", "source"
+        "title",
+        "authors",
+        "year",
+        "journal",
+        "doi",
+        "open_access",
+        "citation_count",
+        "source",
     ]
     available_cols = [c for c in preferred_cols if c in df.columns]
     other_cols = [c for c in df.columns if c not in preferred_cols]
@@ -163,13 +168,17 @@ def evaluations_to_table(evaluations: list[Any]) -> str:
 
     rows = []
     for ev in evaluations:
-        rows.append({
-            "article": ev.article_title[:50] + "..." if len(ev.article_title) > 50 else ev.article_title,
-            "relevance": f"{ev.relevance_score:.2f}",
-            "stance": ev.stance or "-",
-            "stance_conf": f"{ev.stance_confidence:.2f}" if ev.stance_confidence else "-",
-            "combined": f"{ev.combined_score:.2f}",
-        })
+        rows.append(
+            {
+                "article": ev.article_title[:50] + "..."
+                if len(ev.article_title) > 50
+                else ev.article_title,
+                "relevance": f"{ev.relevance_score:.2f}",
+                "stance": ev.stance or "-",
+                "stance_conf": f"{ev.stance_confidence:.2f}" if ev.stance_confidence else "-",
+                "combined": f"{ev.combined_score:.2f}",
+            }
+        )
 
     try:
         from tabulate import tabulate
@@ -183,3 +192,77 @@ def evaluations_to_table(evaluations: list[Any]) -> str:
         return result
     except ImportError:
         return _simple_table_format(rows, list(rows[0].keys()))
+
+
+def export_sentence_evaluations_jsonl(
+    results: list[tuple[Any, Any, list[Any]]],
+    output_path: str,
+) -> None:
+    """Export per-sentence verdicts, evaluations, and articles to JSONL.
+
+    Each JSON line contains one sentence's analysis:
+    - sentence: Sentence model dump
+    - verdict: FinalVerdict model dump
+    - evaluations: SentenceEvaluation dumps with article_key
+    - articles: mapping of article_key -> Article dump
+
+    Args:
+        results: List of (Sentence, FinalVerdict, list[SentenceEvaluation]).
+        output_path: Path to write JSONL output.
+    """
+    with open(output_path, "w", encoding="utf-8") as handle:
+        for sentence, verdict, evaluations in results:
+            articles_by_key: dict[str, dict[str, Any]] = {}
+            evaluation_rows: list[dict[str, Any]] = []
+
+            for evaluation in evaluations:
+                article = getattr(evaluation, "article", None)
+                article_key = _article_key(article)
+                if article is not None and article_key not in articles_by_key:
+                    articles_by_key[article_key] = _model_dump(article)
+
+                evaluation_row = _model_dump(evaluation)
+                evaluation_row.pop("article", None)
+                evaluation_row["article_key"] = article_key
+                evaluation_rows.append(evaluation_row)
+
+            record = {
+                "schema_version": 1,
+                "sentence": _model_dump(sentence),
+                "verdict": _model_dump(verdict),
+                "evaluations": evaluation_rows,
+                "articles": articles_by_key,
+            }
+
+            handle.write(json.dumps(record, ensure_ascii=True))
+            handle.write("\n")
+
+
+def _article_key(article: object | None) -> str:
+    """Create a stable key for an Article to preserve relationships."""
+    if article is None:
+        return "unknown"
+
+    doi = getattr(article, "doi", None)
+    if doi:
+        return f"doi:{str(doi).strip().lower()}"
+
+    source = getattr(article, "source", None)
+    external_id = getattr(article, "external_id", None)
+    if source and external_id:
+        return f"{source}:{external_id}"
+
+    title = getattr(article, "title", "")
+    authors = getattr(article, "authors", [])
+    year = getattr(article, "year", None)
+    fingerprint = f"{title}|{authors}|{year}"
+    return f"hash:{hashlib.sha1(fingerprint.encode('utf-8')).hexdigest()}"
+
+
+def _model_dump(obj: Any) -> dict[str, Any]:
+    """Best-effort conversion of a model or dict into a JSON-safe dict."""
+    if hasattr(obj, "model_dump"):
+        return obj.model_dump()
+    if isinstance(obj, dict):
+        return obj
+    return {"value": obj}
