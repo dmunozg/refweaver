@@ -61,8 +61,7 @@ class SentenceAnalyzer:
             )
             results.append(sentence)
             logger.debug(
-                f"Analyzed: '{sent_text[:50]}...' -> "
-                f"needs_reference={sentence.needs_reference}"
+                f"Analyzed: '{sent_text[:50]}...' -> needs_reference={sentence.needs_reference}"
             )
 
         logger.info(f"Analyzed {len(results)} sentences in paragraph")
@@ -134,9 +133,7 @@ class SentenceAnalyzer:
         """
         sentence_text = sentence.text if isinstance(sentence, Sentence) else sentence
 
-        logger.info(
-            f"Evaluating {len(articles)} articles for: {sentence_text[:60]}..."
-        )
+        logger.info(f"Evaluating {len(articles)} articles for: {sentence_text[:60]}...")
 
         # Stage 1: Relevance scoring for all articles
         logger.debug("Stage 1: Scoring relevance for all articles...")
@@ -183,12 +180,32 @@ class SentenceAnalyzer:
             # Get the article directly from the evaluation
             article = cast(Article, evaluation.article)
 
+            fulltext_content: str | None = None
+            if article.open_access:
+                from refweaver.pdf_extract import try_get_fulltext_from_pdf
+                from refweaver.web_fetch import fetch_article_landing_page
+
+                fulltext_content = try_get_fulltext_from_pdf(
+                    article,
+                    try_alternative_sources=False,
+                )
+                if not fulltext_content:
+                    fulltext_content = fetch_article_landing_page(article)
+
+            if fulltext_content:
+                logger.debug(f"Using full text for stance evaluation: {article.title[:50]}...")
+            else:
+                logger.debug(
+                    f"Falling back to abstract for stance evaluation: {article.title[:50]}..."
+                )
+
             stance_result = self.llm.evaluate_article_stance(
                 sentence=sentence_text,
                 article_title=article.title,
                 article_authors=article.authors,
                 article_year=article.year,
                 article_abstract=article.abstract,
+                article_fulltext=fulltext_content,
             )
 
             # Update evaluation with stance results
@@ -229,14 +246,9 @@ class SentenceAnalyzer:
         sentence_text = sentence.text if isinstance(sentence, Sentence) else sentence
 
         # Filter to only relevant evaluations with stance
-        relevant_with_stance = [
-            e for e in evaluations
-            if e.is_relevant and e.stance is not None
-        ]
+        relevant_with_stance = [e for e in evaluations if e.is_relevant and e.stance is not None]
 
-        logger.info(
-            f"Synthesizing verdict from {len(relevant_with_stance)} evaluated articles"
-        )
+        logger.info(f"Synthesizing verdict from {len(relevant_with_stance)} evaluated articles")
 
         # Check if we have enough evidence
         if len(relevant_with_stance) < min_relevant_articles:
@@ -248,7 +260,7 @@ class SentenceAnalyzer:
                 overall_assessment="INSUFFICIENT_EVIDENCE",
                 confidence=0.0,
                 synthesis=f"Only {len(relevant_with_stance)} relevant articles found. "
-                          f"Need at least {min_relevant_articles} for a reliable verdict.",
+                f"Need at least {min_relevant_articles} for a reliable verdict.",
                 suggested_citation=None,
                 suggested_rewording=None,
             )
@@ -256,15 +268,17 @@ class SentenceAnalyzer:
         # Prepare evaluation data for LLM (include index for matching back)
         eval_data = []
         for idx, ev in enumerate(relevant_with_stance):
-            eval_data.append({
-                "index": idx,
-                "title": ev.article_title,
-                "doi": ev.article_doi,
-                "stance": ev.stance,
-                "confidence": ev.stance_confidence or 0.0,
-                "reasoning": ev.stance_reasoning or "",
-                "evidence": ev.supporting_evidence,
-            })
+            eval_data.append(
+                {
+                    "index": idx,
+                    "title": ev.article_title,
+                    "doi": ev.article_doi,
+                    "stance": ev.stance,
+                    "confidence": ev.stance_confidence or 0.0,
+                    "reasoning": ev.stance_reasoning or "",
+                    "evidence": ev.supporting_evidence,
+                }
+            )
 
         # Get LLM synthesis
         synthesis_result = self.llm.synthesize_final_verdict(

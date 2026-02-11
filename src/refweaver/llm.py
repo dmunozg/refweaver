@@ -164,7 +164,7 @@ class ExtractedArticleMetadata(BaseModel):
     doi: str | None = Field(
         None,
         description="The DOI of the article (e.g., '10.1038/s41586-021-03819-2'), or null if not found. "
-                    "Extract only the DOI for THIS article, not DOIs from references.",
+        "Extract only the DOI for THIS article, not DOIs from references.",
     )
     doi_found: bool = Field(
         ...,
@@ -173,8 +173,8 @@ class ExtractedArticleMetadata(BaseModel):
     generated_summary: str | None = Field(
         None,
         description="If no abstract was found, generate a concise summary (2-4 sentences) "
-                    "including: research question/objective, methods used, and main findings. "
-                    "This should capture the essence of the paper even without an explicit abstract.",
+        "including: research question/objective, methods used, and main findings. "
+        "This should capture the essence of the paper even without an explicit abstract.",
     )
     used_generated_summary: bool = Field(
         default=False,
@@ -597,9 +597,7 @@ If the article suggests a modification to the original claim, provide the revise
         )
 
         try:
-            logger.debug(
-                f"Evaluating article (async) '{article_title[:50]}...' from abstract"
-            )
+            logger.debug(f"Evaluating article (async) '{article_title[:50]}...' from abstract")
             response = await agent.run(prompt)
             result = response.output
             return {
@@ -951,8 +949,7 @@ If abstract or DOI is not found, set the corresponding found flag to false."""
                 )
             if extracted["doi"]:
                 logger.info(
-                    f"Successfully extracted DOI ({extracted['doi']}) "
-                    f"for: {article_title[:50]}..."
+                    f"Successfully extracted DOI ({extracted['doi']}) for: {article_title[:50]}..."
                 )
 
             return extracted
@@ -1030,8 +1027,7 @@ If abstract or DOI is not found, set the corresponding found flag to false."""
                 )
             if extracted["doi"]:
                 logger.info(
-                    f"Successfully extracted DOI ({extracted['doi']}) "
-                    f"for: {article_title[:50]}..."
+                    f"Successfully extracted DOI ({extracted['doi']}) for: {article_title[:50]}..."
                 )
 
             return extracted
@@ -1113,6 +1109,7 @@ Provide your score and brief reasoning."""
         article_authors: list[str],
         article_year: int | None,
         article_abstract: str | None,
+        article_fulltext: str | None = None,
     ) -> dict[str, Any]:
         """Evaluate detailed stance of an article (Stage 2).
 
@@ -1126,15 +1123,24 @@ Provide your score and brief reasoning."""
             article_authors: List of author names.
             article_year: Publication year.
             article_abstract: Article abstract.
+            article_fulltext: Full article text (optional).
 
         Returns:
             Dict with 'stance', 'confidence', 'reasoning', 'evidence', 'modification'.
         """
         abstract = article_abstract or "[No abstract available]"
+        fulltext = article_fulltext or ""
         authors_str = ", ".join(article_authors[:3])
         if len(article_authors) > 3:
             authors_str += ", et al."
         year_str = str(article_year) if article_year else "Unknown"
+
+        if fulltext.strip():
+            content_label = "Full text"
+            content = fulltext[:20000]
+        else:
+            content_label = "Abstract"
+            content = abstract[:1500]
 
         prompt = f"""Evaluate how this article relates to the given sentence/claim.
 
@@ -1145,14 +1151,14 @@ ARTICLE:
 Title: {article_title}
 Authors: {authors_str}
 Year: {year_str}
-Abstract: {abstract[:1500]}
+{content_label}: {content}
 
 INSTRUCTIONS:
 1. Determine if the article SUPPORTS, CONTRADICTS, or PARTIALLY_SUPPORTS the sentence
 2. SUPPORTS: Evidence clearly backs the claim
 3. CONTRADICTS: Evidence clearly contradicts the claim
 4. PARTIALLY_SUPPORTS: Related but with important nuances or conditions
-5. Provide specific evidence from the abstract
+5. Provide specific evidence from the provided text
 6. If not SUPPORTS, suggest how the sentence should be modified
 
 Be thorough and cite specific evidence."""
@@ -1222,7 +1228,7 @@ Be thorough and cite specific evidence."""
                 f"  Stance: {ev.get('stance', 'UNKNOWN')} (confidence: {ev.get('confidence', 0):.2f})",
                 f"  Reasoning: {ev.get('reasoning', 'N/A')[:300]}...",
             ]
-            if ev.get('evidence'):
+            if ev.get("evidence"):
                 lines.append(f"  Evidence: {ev['evidence'][:200]}...")
             eval_texts.append("\n".join(lines))
 
@@ -1266,9 +1272,7 @@ Provide a balanced assessment based on the weight of evidence."""
             response = agent.run_sync(prompt)
             result = response.output
 
-            logger.success(
-                f"Final verdict: {result.verdict} (confidence: {result.confidence:.2f})"
-            )
+            logger.success(f"Final verdict: {result.verdict} (confidence: {result.confidence:.2f})")
             return {
                 "verdict": result.verdict,
                 "confidence": result.confidence,
