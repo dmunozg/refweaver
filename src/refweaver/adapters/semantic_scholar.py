@@ -7,6 +7,7 @@ from pydantic import HttpUrl
 from semanticscholar import SemanticScholar
 
 from refweaver.models import Article
+from refweaver.rate_limit import rate_limit
 from refweaver.timing import run_with_timeout, timed
 
 DEFAULT_SEARCH_TIMEOUT = 15.0  # seconds
@@ -26,17 +27,16 @@ class SemanticScholarAdapter:
         Args:
             api_key: Optional API key for higher rate limits.
         """
-        self.client = SemanticScholar(api_key=api_key)
+        if api_key is not None:
+            self.client = SemanticScholar(api_key=api_key)
+        else:
+            self.client = SemanticScholar()
 
     def _parse_authors(self, authors: list[Any]) -> list[str]:
         """Extract author names from Semantic Scholar author objects."""
         names = []
         for author in authors:
-            name = (
-                author.get("name")
-                if isinstance(author, dict)
-                else getattr(author, "name", None)
-            )
+            name = author.get("name") if isinstance(author, dict) else getattr(author, "name", None)
             if name:
                 names.append(name)
         return names
@@ -202,6 +202,7 @@ class SemanticScholarAdapter:
         fields: list[str],
     ) -> list[Article]:
         """Internal search method (without timeout wrapper)."""
+        rate_limit("semantic_scholar")
         results: Any = self.client.search_paper(
             query=query,
             limit=limit,
@@ -247,9 +248,7 @@ class SemanticScholarAdapter:
             ]
 
         try:
-            return run_with_timeout(
-                self._do_search, timeout, query, limit, fields
-            )
+            return run_with_timeout(self._do_search, timeout, query, limit, fields)
         except TimeoutError:
             logger.warning(
                 f"Semantic Scholar search timed out after {timeout}s for query: {query[:50]}..."
@@ -266,6 +265,7 @@ class SemanticScholarAdapter:
             An Article if found, None otherwise.
         """
         try:
+            rate_limit("semantic_scholar")
             paper: Any = self.client.get_paper(doi)
             return self._to_article(paper)
         except Exception:
@@ -281,6 +281,7 @@ class SemanticScholarAdapter:
             An Article if found, None otherwise.
         """
         try:
+            rate_limit("semantic_scholar")
             paper: Any = self.client.get_paper(f"CorpusId:{paper_id}")
             return self._to_article(paper)
         except Exception:

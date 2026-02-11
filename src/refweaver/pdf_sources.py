@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING
 import requests
 from loguru import logger
 
+from refweaver.rate_limit import rate_limit, rate_limit_url
+
 if TYPE_CHECKING:
     from refweaver.models import Article
 
@@ -36,12 +38,14 @@ def resolve_pdf_via_unpaywall(article: "Article", email: str | None = None) -> s
         # Use email from env or default
         if email is None:
             import os
+
             email = os.getenv("UNPAYWALL_EMAIL", "user@example.com")
 
         url = f"https://api.unpaywall.org/v2/{article.doi}"
         params = {"email": email}
 
         logger.debug(f"Querying Unpaywall for DOI: {article.doi}")
+        rate_limit("unpaywall")
         response = requests.get(url, params=params, timeout=10)
         response.raise_for_status()
 
@@ -86,9 +90,12 @@ def resolve_pdf_via_annas_archive(article: "Article") -> str | None:
     try:
         # Anna's Archive has a search API
         # We can search by DOI or title + authors
-        search_query = article.doi if article.doi else f"{article.title} {' '.join(article.authors[:2])}"
+        search_query = (
+            article.doi if article.doi else f"{article.title} {' '.join(article.authors[:2])}"
+        )
 
         logger.debug(f"Searching Anna's Archive for: {search_query[:60]}...")
+        rate_limit("annas_archive")
 
         # Anna's Archive search endpoint
         search_url = "https://annas-archive.org/search"
@@ -145,6 +152,7 @@ def resolve_pdf_via_direct_doi(article: "Article") -> str | None:
         doi_url = f"https://doi.org/{article.doi}"
 
         logger.debug(f"Resolving DOI directly: {doi_url}")
+        rate_limit_url(doi_url, default_key="doi")
 
         # Follow redirects
         response = requests.head(
@@ -152,9 +160,7 @@ def resolve_pdf_via_direct_doi(article: "Article") -> str | None:
             allow_redirects=True,
             timeout=10,
             headers={
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                )
+                "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
             },
         )
 

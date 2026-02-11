@@ -249,8 +249,18 @@ class Article(BaseModel):
     def _month_to_name(self, month: int) -> str:
         """Convert month number to BibTeX month macro."""
         months = [
-            "jan", "feb", "mar", "apr", "may", "jun",
-            "jul", "aug", "sep", "oct", "nov", "dec"
+            "jan",
+            "feb",
+            "mar",
+            "apr",
+            "may",
+            "jun",
+            "jul",
+            "aug",
+            "sep",
+            "oct",
+            "nov",
+            "dec",
         ]
         if 1 <= month <= 12:
             return months[month - 1]
@@ -276,9 +286,12 @@ class Article(BaseModel):
             url = f"https://doi.org/{self.doi}"
             headers = {
                 "Accept": "application/x-bibtex",
-                "User-Agent": "RefWeaver/1.0 (mailto:diego@asgamers.net)"
+                "User-Agent": "RefWeaver/1.0 (mailto:diego@asgamers.net)",
             }
 
+            from refweaver.rate_limit import rate_limit
+
+            rate_limit("crossref")
             response = requests.get(url, headers=headers, timeout=30)
             response.raise_for_status()
             bibtex_str = response.text
@@ -292,6 +305,7 @@ class Article(BaseModel):
         except Exception as e:
             # Log but don't fail - return original
             from loguru import logger
+
             logger.debug(f"CrossRef enrichment failed for DOI {self.doi}: {e}")
 
         return self
@@ -339,9 +353,18 @@ class Article(BaseModel):
             elif field_name == "month":
                 # Try to parse month name or number
                 month_map = {
-                    "jan": 1, "feb": 2, "mar": 3, "apr": 4,
-                    "may": 5, "jun": 6, "jul": 7, "aug": 8,
-                    "sep": 9, "oct": 10, "nov": 11, "dec": 12
+                    "jan": 1,
+                    "feb": 2,
+                    "mar": 3,
+                    "apr": 4,
+                    "may": 5,
+                    "jun": 6,
+                    "jul": 7,
+                    "aug": 8,
+                    "sep": 9,
+                    "oct": 10,
+                    "nov": 11,
+                    "dec": 12,
                 }
                 month_lower = value.lower()[:3]
                 if month_lower in month_map:

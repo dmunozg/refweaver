@@ -9,6 +9,7 @@ from loguru import logger
 from pydantic import HttpUrl
 
 from refweaver.models import Article
+from refweaver.rate_limit import rate_limit
 from refweaver.timing import run_with_timeout, timed
 
 DEFAULT_SEARCH_TIMEOUT = 30.0  # seconds - Perplexity is slower due to LLM generation
@@ -75,6 +76,7 @@ class PerplexityAdapter:
             "temperature": temperature,
         }
 
+        rate_limit("perplexity")
         response = requests.post(
             f"{self.base_url}/chat/completions",
             headers=headers,
@@ -104,17 +106,19 @@ class PerplexityAdapter:
             message_raw = choices[0].get("message", {}) if isinstance(choices[0], dict) else {}
             message: dict[str, Any] = message_raw if isinstance(message_raw, dict) else {}
             msg_annotations_raw = message.get("annotations", [])
-            msg_annotations: list[Any] = msg_annotations_raw if isinstance(msg_annotations_raw, list) else []
+            msg_annotations: list[Any] = (
+                msg_annotations_raw if isinstance(msg_annotations_raw, list) else []
+            )
             for ann in msg_annotations:
                 if isinstance(ann, dict) and ann.get("type") == "url_citation":
                     url_citation = ann.get("url_citation", {})
                     if url_citation:
-                                annotations.append(
-                                    {
-                                        "url": url_citation.get("url", ""),
-                                        "title": url_citation.get("title", ""),
-                                    }
-                                )
+                        annotations.append(
+                            {
+                                "url": url_citation.get("url", ""),
+                                "title": url_citation.get("title", ""),
+                            }
+                        )
 
         return annotations
 

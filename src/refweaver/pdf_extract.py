@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING
 import requests
 from loguru import logger
 
+from refweaver.rate_limit import rate_limit_url
+
 if TYPE_CHECKING:
     from refweaver.models import Article
 
@@ -43,8 +45,9 @@ def extract_text_from_pdf_bytes(pdf_bytes: bytes) -> str:
         for page_num in range(len(doc)):
             page = doc[page_num]
             text = page.get_text()
-            if text.strip():
-                text_parts.append(text)
+            text_str = text if isinstance(text, str) else ""
+            if text_str.strip():
+                text_parts.append(text_str)
 
         doc.close()
         return "\n\n".join(text_parts)
@@ -74,6 +77,7 @@ def download_and_extract_pdf(url: str, timeout: int = 60) -> str | None:
             ),
         }
 
+        rate_limit_url(url)
         response = requests.get(url, headers=headers, timeout=timeout, stream=True)
         response.raise_for_status()
 
@@ -151,12 +155,12 @@ def extract_doi_from_text(text: str) -> str | None:
             # Clean up the DOI
             doi = match.strip()
             # Remove URL prefix if present
-            doi = re.sub(r'^https?://(?:dx\.)?doi\.org/', '', doi, flags=re.IGNORECASE)
-            doi = re.sub(r'^doi:\s*', '', doi, flags=re.IGNORECASE)
+            doi = re.sub(r"^https?://(?:dx\.)?doi\.org/", "", doi, flags=re.IGNORECASE)
+            doi = re.sub(r"^doi:\s*", "", doi, flags=re.IGNORECASE)
             # Remove trailing punctuation
-            doi = doi.rstrip('.,;:)')
+            doi = doi.rstrip(".,;:)")
             # Basic validation: must start with 10.
-            if doi.startswith('10.') and len(doi) > 8:
+            if doi.startswith("10.") and len(doi) > 8:
                 return doi
     return None
 
@@ -181,6 +185,7 @@ def extract_doi_from_pdf_url(url: str, timeout: int = 60) -> str | None:
             ),
         }
 
+        rate_limit_url(url)
         response = requests.get(url, headers=headers, timeout=timeout, stream=True)
         response.raise_for_status()
 
@@ -210,8 +215,9 @@ def extract_doi_from_pdf_url(url: str, timeout: int = 60) -> str | None:
             for page_num in range(min(3, len(doc))):
                 page = doc[page_num]
                 text = page.get_text()
-                if text.strip():
-                    text_parts.append(text)
+                text_str = text if isinstance(text, str) else ""
+                if text_str.strip():
+                    text_parts.append(text_str)
 
             doc.close()
             text = "\n\n".join(text_parts)
@@ -254,11 +260,11 @@ def is_pdf_url(url: str) -> bool:
     url_lower = url.lower()
     # Check common PDF indicators
     return (
-        url_lower.endswith('.pdf')
-        or '/pdf/' in url_lower
-        or '/download/' in url_lower
-        or 'pdf=1' in url_lower
-        or 'download=1' in url_lower
+        url_lower.endswith(".pdf")
+        or "/pdf/" in url_lower
+        or "/download/" in url_lower
+        or "pdf=1" in url_lower
+        or "download=1" in url_lower
     )
 
 

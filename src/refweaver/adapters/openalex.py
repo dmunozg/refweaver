@@ -7,6 +7,7 @@ from pyalex import Works
 from pydantic import HttpUrl
 
 from refweaver.models import Article
+from refweaver.rate_limit import rate_limit
 from refweaver.timing import run_with_timeout, timed
 
 DEFAULT_SEARCH_TIMEOUT = 15.0  # seconds
@@ -28,6 +29,7 @@ class OpenAlexAdapter:
         """
         if api_key:
             from pyalex import config as pyalex_config
+
             pyalex_config.email = api_key
 
     def _parse_authors(self, authors: list[Any]) -> list[str]:
@@ -218,6 +220,7 @@ class OpenAlexAdapter:
 
     def _do_search(self, query: str, limit: int) -> list[Article]:
         """Internal search method (without timeout wrapper)."""
+        rate_limit("openalex")
         works = Works().search(query).get(per_page=limit)
 
         articles: list[Article] = []
@@ -251,9 +254,7 @@ class OpenAlexAdapter:
         try:
             return run_with_timeout(self._do_search, timeout, query, limit)
         except TimeoutError:
-            logger.warning(
-                f"OpenAlex search timed out after {timeout}s for query: {query[:50]}..."
-            )
+            logger.warning(f"OpenAlex search timed out after {timeout}s for query: {query[:50]}...")
             return []
 
     def get_paper_by_doi(self, doi: str) -> Article | None:
@@ -266,6 +267,7 @@ class OpenAlexAdapter:
             An Article if found, None otherwise.
         """
         try:
+            rate_limit("openalex")
             # Normalize DOI
             if doi.startswith("https://doi.org/"):
                 doi = doi[16:]
@@ -287,6 +289,7 @@ class OpenAlexAdapter:
             An Article if found, None otherwise.
         """
         try:
+            rate_limit("openalex")
             # Normalize ID
             if not work_id.startswith("W") and not work_id.startswith("https://"):
                 work_id = f"W{work_id}"

@@ -1,11 +1,12 @@
 """Google Scholar adapter for RefWeaver using scholarly library."""
 
-from typing import Any
+from typing import Any, cast
 
 from pydantic import HttpUrl
 from scholarly import ProxyGenerator, scholarly
 
 from refweaver.models import Article
+from refweaver.rate_limit import rate_limit
 
 
 class GoogleScholarAdapter:
@@ -64,7 +65,8 @@ class GoogleScholarAdapter:
             year_str = str(year_data)
             # Extract first 4 digits that look like a year (1900-2099)
             import re
-            match = re.search(r'\b(19|20)\d{2}\b', year_str)
+
+            match = re.search(r"\b(19|20)\d{2}\b", year_str)
             if match:
                 return int(match.group(0))
             return int(year_str)
@@ -184,6 +186,7 @@ class GoogleScholarAdapter:
 
         try:
             # Get search results
+            rate_limit("google_scholar")
             search_results = scholarly.search_pubs(query)
 
             for i, publication in enumerate(search_results):
@@ -193,7 +196,8 @@ class GoogleScholarAdapter:
                 try:
                     # Optionally fill in more details (slower)
                     if fill:
-                        publication = scholarly.fill(publication)
+                        rate_limit("google_scholar")
+                        publication = cast(Any, scholarly.fill(cast(Any, publication)))
 
                     article = self._to_article(publication)
                     articles.append(article)
@@ -220,6 +224,7 @@ class GoogleScholarAdapter:
             An Article if found, None otherwise.
         """
         try:
+            rate_limit("google_scholar")
             # Normalize DOI
             if doi.startswith("https://doi.org/"):
                 doi = doi[16:]
@@ -257,6 +262,7 @@ class GoogleScholarAdapter:
         try:
             # Google Scholar IDs are tricky - we search and match
             # This is a best-effort approach
+            rate_limit("google_scholar")
             search_results = scholarly.search_pubs(pub_id)
 
             for publication in search_results:

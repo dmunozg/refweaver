@@ -9,6 +9,7 @@ from refweaver.adapters.scholarly import GoogleScholarAdapter
 from refweaver.adapters.semantic_scholar import SemanticScholarAdapter
 from refweaver.llm import LLMClient, LLMConfig
 from refweaver.models import Article
+from refweaver.rate_limit import rate_limit_url
 
 
 class ArticleEnricher:
@@ -141,6 +142,7 @@ class ArticleEnricher:
             "Cache-Control": "max-age=0",
         }
 
+        rate_limit_url(url)
         response = requests.get(url, headers=headers, timeout=15, allow_redirects=True)
         response.raise_for_status()
         return response.text
@@ -179,6 +181,7 @@ class ArticleEnricher:
         driver = None
         try:
             driver = webdriver.Chrome(options=chrome_options)
+            rate_limit_url(url)
             driver.get(url)
 
             # Wait for page to load (wait for body element)
@@ -459,7 +462,6 @@ class ArticleEnricher:
         # Create a temporary article with the extracted DOI to query CrossRef
         from datetime import date
 
-
         temp_article = Article(
             source="pdf_extraction",
             external_id=extracted_doi,
@@ -496,9 +498,7 @@ class ArticleEnricher:
             )
             return article
 
-        logger.success(
-            f"DOI validated ({similarity:.2%} match). Enriching with CrossRef metadata."
-        )
+        logger.success(f"DOI validated ({similarity:.2%} match). Enriching with CrossRef metadata.")
 
         # Merge the CrossRef metadata into the original article
         merged = merge_articles([article, crossref_article])
@@ -573,8 +573,7 @@ class ArticleEnricher:
 
                     if sim >= title_similarity_threshold:
                         logger.success(
-                            f"Found DOI via title search: {candidate.doi} "
-                            f"(similarity: {sim:.2%})"
+                            f"Found DOI via title search: {candidate.doi} (similarity: {sim:.2%})"
                         )
                         return article.model_copy(update={"doi": candidate.doi})
 
@@ -618,7 +617,9 @@ class ArticleEnricher:
                             logger.debug(f"Fetching article URL for LLM: {url_str}")
                             url_text = self._fetch_html(url_str)
                             if url_text:
-                                html_sources.append(f"=== FROM ARTICLE URL ({url_str}) ===\n{url_text[:8000]}")
+                                html_sources.append(
+                                    f"=== FROM ARTICLE URL ({url_str}) ===\n{url_text[:8000]}"
+                                )
                         except Exception as e:
                             logger.debug(f"Article URL fetch failed: {e}")
 
@@ -704,7 +705,9 @@ class ArticleEnricher:
             default_abstract_strategies.update(abstract_strategies)
 
         logger.info(f"Starting full enrichment for: {article.title[:50]}...")
-        logger.debug(f"Initial state: DOI={article.doi is not None}, abstract={article.abstract is not None}")
+        logger.debug(
+            f"Initial state: DOI={article.doi is not None}, abstract={article.abstract is not None}"
+        )
 
         # Step 1: Check entry type
         if require_article_type and article.entry_type.lower() != "article":
@@ -841,7 +844,9 @@ class ArticleEnricher:
             Article with enriched metadata if match found, otherwise original.
         """
         if not article.title or len(article.title) < 10:
-            logger.debug(f"Title too short or missing, skipping title enrichment: {article.title[:50]}...")
+            logger.debug(
+                f"Title too short or missing, skipping title enrichment: {article.title[:50]}..."
+            )
             return article
 
         # Skip if we already have a DOI (use CrossRef instead)
@@ -883,8 +888,7 @@ class ArticleEnricher:
 
             if best_match:
                 logger.success(
-                    f"Found match with similarity {best_similarity:.3f}: "
-                    f"{best_match.title[:50]}..."
+                    f"Found match with similarity {best_similarity:.3f}: {best_match.title[:50]}..."
                 )
                 # Merge the matched article's metadata into the original
                 merged = merge_articles([article, best_match])
@@ -896,8 +900,7 @@ class ArticleEnricher:
                     return merged
             else:
                 logger.debug(
-                    f"No match above threshold {similarity_threshold} for: "
-                    f"{clean_title[:50]}..."
+                    f"No match above threshold {similarity_threshold} for: {clean_title[:50]}..."
                 )
 
         except Exception as e:
