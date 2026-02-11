@@ -52,4 +52,8 @@ htmlcov/
 # uv
 uv.lock
 tests.py
+
+docs/TODO.md
 AGENTS.md
+
+*.log
