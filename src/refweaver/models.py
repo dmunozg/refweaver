@@ -92,6 +92,25 @@ class Article(BaseModel):
 
     model_config = {"frozen": True}
 
+    def __str__(self) -> str:
+        authors = ", ".join(self.authors[:3]) if self.authors else "Unknown author"
+        if self.authors and len(self.authors) > 3:
+            authors = f"{self.authors[0]} et al."
+
+        year = str(self.year) if self.year else "n.d."
+        title = self.title.rstrip(".") if self.title else "Untitled"
+
+        parts = [f"{authors} ({year}). {title}."]
+        if self.journal:
+            parts.append(f"{self.journal}.")
+
+        if self.doi:
+            parts.append(f"DOI: {self.doi}")
+        elif self.url:
+            parts.append(f"URL: {self.url}")
+
+        return " ".join(parts)
+
     def to_bibtex(self, cite_key: str | None = None) -> str:
         """Convert Article to BibTeX format.
 
