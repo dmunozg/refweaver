@@ -1,5 +1,6 @@
 """OpenAlex adapter for RefWeaver."""
 
+import os
 from typing import Any
 
 from loguru import logger
@@ -27,6 +28,9 @@ class OpenAlexAdapter:
         Args:
             api_key: Optional API key for higher rate limits (email address).
         """
+        if api_key is None:
+            api_key = os.getenv("OPENALEX_API_KEY")
+
         if api_key:
             from pyalex import config as pyalex_config
 

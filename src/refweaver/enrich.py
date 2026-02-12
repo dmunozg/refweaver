@@ -1,5 +1,7 @@
 """Article enrichment utilities to fill missing metadata."""
 
+import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from loguru import logger
@@ -762,6 +764,69 @@ class ArticleEnricher:
         )
 
         return article
+
+    def batch_enrich(
+        self,
+        articles: list[Article],
+        require_article_type: bool = True,
+        doi_strategies: dict[str, bool] | None = None,
+        abstract_strategies: dict[str, bool] | None = None,
+        max_workers: int | None = None,
+    ) -> list[Article]:
+        """Enrich a list of articles in parallel.
+
+        Args:
+            articles: List of articles to enrich.
+            require_article_type: If True, only enrich entry_type="article" items.
+            doi_strategies: Optional dict to control DOI discovery strategies.
+            abstract_strategies: Optional dict to control abstract filling strategies.
+            max_workers: Maximum parallel workers (defaults to REFWEAVER_ENRICH_MAX_WORKERS
+                or 4 if not set).
+
+        Returns:
+            List of enriched articles in the original order.
+        """
+        if not articles:
+            return []
+
+        if max_workers is None:
+            max_workers_env = os.getenv("REFWEAVER_ENRICH_MAX_WORKERS", "4")
+            try:
+                max_workers = max(1, int(max_workers_env))
+            except ValueError:
+                max_workers = 4
+
+        logger.info(
+            f"Starting parallel enrichment for {len(articles)} articles (max_workers={max_workers})"
+        )
+
+        results: list[Article | None] = [None] * len(articles)
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(
+                    self.enrich,
+                    article,
+                    require_article_type,
+                    doi_strategies,
+                    abstract_strategies,
+                ): idx
+                for idx, article in enumerate(articles)
+            }
+
+            for future in as_completed(futures):
+                idx = futures[future]
+                try:
+                    results[idx] = future.result()
+                except Exception as e:
+                    logger.warning(f"Parallel enrichment failed for index {idx}: {e}")
+                    results[idx] = articles[idx]
+
+        enriched_articles = [article for article in results if article is not None]
+        logger.info(
+            f"Parallel enrichment complete: {len(enriched_articles)}/{len(articles)} results"
+        )
+        return enriched_articles
 
     def enrich_batch(
         self,

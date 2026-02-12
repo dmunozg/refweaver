@@ -262,7 +262,7 @@ def _article_key(article: object | None) -> str:
 def _model_dump(obj: Any) -> dict[str, Any]:
     """Best-effort conversion of a model or dict into a JSON-safe dict."""
     if hasattr(obj, "model_dump"):
-        return obj.model_dump()
+        return obj.model_dump(mode="json")
     if isinstance(obj, dict):
         return obj
     return {"value": obj}
