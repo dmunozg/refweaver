@@ -238,6 +238,50 @@ def export_sentence_evaluations_jsonl(
             handle.write("\n")
 
 
+def load_sentence_evaluations_jsonl(
+    input_path: str,
+) -> list[tuple[Any, Any, list[Any]]]:
+    """Load sentence evaluations from JSONL and reconstruct models.
+
+    Args:
+        input_path: Path to JSONL file produced by export_sentence_evaluations_jsonl().
+
+    Returns:
+        List of (Sentence, FinalVerdict, list[SentenceEvaluation]).
+    """
+    from refweaver.evaluation_models import FinalVerdict, SentenceEvaluation
+    from refweaver.models import Article, Sentence
+
+    results: list[tuple[Any, Any, list[Any]]] = []
+
+    with open(input_path, "r", encoding="utf-8") as handle:
+        for line in handle:
+            if not line.strip():
+                continue
+
+            record = json.loads(line)
+            sentence = Sentence.model_validate(record["sentence"])
+            verdict = FinalVerdict.model_validate(record["verdict"])
+
+            articles_by_key = {
+                key: Article.model_validate(value)
+                for key, value in record.get("articles", {}).items()
+            }
+
+            evaluations: list[SentenceEvaluation] = []
+            for row in record.get("evaluations", []):
+                article_key = row.get("article_key", "unknown")
+                article = articles_by_key.get(article_key)
+                payload = dict(row)
+                payload.pop("article_key", None)
+                payload["article"] = article
+                evaluations.append(SentenceEvaluation.model_validate(payload))
+
+            results.append((sentence, verdict, evaluations))
+
+    return results
+
+
 def _article_key(article: object | None) -> str:
     """Create a stable key for an Article to preserve relationships."""
     if article is None:
