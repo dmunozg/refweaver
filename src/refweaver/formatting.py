@@ -197,6 +197,64 @@ def evaluations_to_table(evaluations: list["SentenceEvaluation"]) -> str:
         return _simple_table_format(rows, list(rows[0].keys()))
 
 
+def sentence_evaluations_to_markdown(
+    results: list[tuple[Any, Any, list[Any]]],
+) -> str:
+    """Render sentence evaluations into a Markdown report.
+
+    Args:
+        results: List of (Sentence, FinalVerdict, list[SentenceEvaluation]).
+
+    Returns:
+        Markdown report string.
+    """
+    lines: list[str] = ["# Reference Analysis Report", ""]
+
+    for index, (sentence, verdict, evaluations) in enumerate(results, start=1):
+        lines.append(f"## Sentence {index}")
+        lines.append("")
+        lines.append(f"**Sentence:** {sentence.text}")
+        lines.append("")
+        lines.append(
+            f"**Verdict:** {verdict.overall_assessment} (confidence {verdict.confidence:.2f})"
+        )
+
+        if verdict.suggested_rewording:
+            lines.append("")
+            lines.append(f"**Suggested rewording:** {verdict.suggested_rewording}")
+
+        if verdict.synthesis:
+            lines.append("")
+            lines.append("**Synthesis:**")
+            lines.append("")
+            lines.append(verdict.synthesis)
+
+        primary_evaluations = verdict.get_primary_evaluations(evaluations)
+        if primary_evaluations:
+            lines.append("")
+            lines.append("**Recommended references:**")
+            lines.append("")
+            for evaluation in primary_evaluations:
+                lines.append(f"- {evaluation.article}")
+        else:
+            lines.append("")
+            lines.append("**Recommended references:** None")
+
+        if evaluations:
+            lines.append("")
+            lines.append("**Top evaluations:**")
+            lines.append("")
+            for evaluation in evaluations[:5]:
+                lines.append(
+                    f"- {evaluation.article_title} (score {evaluation.relevance_score:.2f}, "
+                    f"stance {evaluation.stance or 'N/A'})"
+                )
+
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 def export_sentence_evaluations_jsonl(
     results: list[tuple[Any, Any, list[Any]]],
     output_path: str,
