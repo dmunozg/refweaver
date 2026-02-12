@@ -33,3 +33,21 @@ def enqueue_job(func: str, *args: Any, **kwargs: Any) -> str:
     queue = get_queue()
     job = queue.enqueue(func, *args, **kwargs, job_timeout=timeout)
     return job.id
+
+
+def fetch_job(job_id: str) -> dict[str, Any]:
+    """Fetch a job and return status/response payload."""
+    queue = get_queue()
+    job = queue.fetch_job(job_id)
+    if job is None:
+        return {"status": "missing", "job_id": job_id}
+
+    status = job.get_status()
+    payload: dict[str, Any] = {"status": status, "job_id": job_id}
+
+    if status == "failed":
+        payload["error"] = str(job.exc_info)
+    elif status == "finished":
+        payload["result"] = job.result
+
+    return payload

@@ -46,6 +46,7 @@ dev = [
 
 [project.scripts]
 refweaver = "refweaver.__main__:main"
+refweaver-worker = "refweaver.worker:main"
 
 [build-system]
 requires = ["hatchling"]
