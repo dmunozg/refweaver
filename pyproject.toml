@@ -30,6 +30,8 @@ dependencies = [
     "openai>=1.0.0",
     "nltk>=3.8.0",
     "pymupdf>=1.23.0",
+    "redis>=5.0.0",
+    "rq>=1.16.0",
 ]
 
 [project.optional-dependencies]

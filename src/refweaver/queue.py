@@ -1,0 +1,35 @@
+"""RQ-backed job queue integration."""
+
+from __future__ import annotations
+
+import os
+from typing import Any
+
+from redis import Redis
+from rq import Queue
+
+
+def _redis_url() -> str:
+    return os.getenv("REFWEAVER_REDIS_URL", "redis://localhost:6379/0")
+
+
+def get_redis_connection() -> Redis:
+    return Redis.from_url(_redis_url())
+
+
+def get_queue(name: str | None = None) -> Queue:
+    queue_name = name or os.getenv("REFWEAVER_QUEUE_NAME", "refweaver")
+    return Queue(queue_name, connection=get_redis_connection())
+
+
+def enqueue_job(func: str, *args: Any, **kwargs: Any) -> str:
+    """Enqueue a job by function path and return job id."""
+    job_timeout = os.getenv("REFWEAVER_JOB_TIMEOUT", "1800")
+    try:
+        timeout = int(job_timeout)
+    except ValueError:
+        timeout = 1800
+
+    queue = get_queue()
+    job = queue.enqueue(func, *args, **kwargs, job_timeout=timeout)
+    return job.id
