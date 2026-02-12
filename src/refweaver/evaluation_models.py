@@ -62,9 +62,15 @@ class SentenceEvaluation(BaseModel):
     # Note: article field uses Any to avoid circular import issues with Pydantic v2
     # The actual type is Article from refweaver.models
     article: object = Field(..., description="The full Article object that was evaluated")
-    article_title: str = Field(..., description="Title of the evaluated article (cached from article)")
-    article_doi: str | None = Field(None, description="DOI of the article if available (cached from article)")
-    article_authors: list[str] = Field(default_factory=list, description="Article authors (cached from article)")
+    article_title: str = Field(
+        ..., description="Title of the evaluated article (cached from article)"
+    )
+    article_doi: str | None = Field(
+        None, description="DOI of the article if available (cached from article)"
+    )
+    article_authors: list[str] = Field(
+        default_factory=list, description="Article authors (cached from article)"
+    )
     article_year: int | None = Field(None, description="Publication year (cached from article)")
 
     # Stage 1: Relevance scoring
@@ -120,10 +126,12 @@ class SentenceEvaluation(BaseModel):
             f"Relevance: {self.relevance_score:.2f}",
         ]
         if self.stance:
-            lines.extend([
-                f"Stance: {self.stance} (confidence: {self.stance_confidence:.2f})",
-                f"Reasoning: {self.stance_reasoning}",
-            ])
+            lines.extend(
+                [
+                    f"Stance: {self.stance} (confidence: {self.stance_confidence:.2f})",
+                    f"Reasoning: {self.stance_reasoning}",
+                ]
+            )
             if self.supporting_evidence:
                 lines.append(f"Evidence: {self.supporting_evidence[:200]}...")
             if self.suggested_modification:
@@ -190,13 +198,31 @@ class FinalVerdict(BaseModel):
         for identifier in self.primary_source_identifiers:
             # Try to match by DOI first (most reliable), then by title
             for ev in evaluations:
-                if identifier.doi and ev.article_doi == identifier.doi or ev.article_title == identifier.title:
+                if (
+                    identifier.doi
+                    and ev.article_doi == identifier.doi
+                    or ev.article_title == identifier.title
+                ):
                     matched.append(ev)
                     break
             else:
                 # Fallback: try fuzzy match on title if exact match fails
                 for ev in evaluations:
                     if identifier.title in ev.article_title or ev.article_title in identifier.title:
+                        matched.append(ev)
+                        break
+
+        if matched or not self.primary_sources:
+            return matched
+
+        for source_title in self.primary_sources:
+            for ev in evaluations:
+                if ev.article_title == source_title:
+                    matched.append(ev)
+                    break
+            else:
+                for ev in evaluations:
+                    if source_title in ev.article_title or ev.article_title in source_title:
                         matched.append(ev)
                         break
 

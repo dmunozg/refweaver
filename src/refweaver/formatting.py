@@ -6,9 +6,12 @@ in Jupyter notebooks or terminal output.
 
 import hashlib
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
+
+if TYPE_CHECKING:
+    from refweaver.evaluation_models import SentenceEvaluation
 
 
 def articles_to_table(
@@ -154,7 +157,7 @@ def articles_to_pandas(articles: list[Any]) -> Any:
     return df[available_cols + other_cols]
 
 
-def evaluations_to_table(evaluations: list[Any]) -> str:
+def evaluations_to_table(evaluations: list["SentenceEvaluation"]) -> str:
     """Convert a list of SentenceEvaluation objects to a table.
 
     Args:
@@ -232,6 +235,9 @@ def export_sentence_evaluations_jsonl(
                 "verdict": _model_dump(verdict),
                 "evaluations": evaluation_rows,
                 "articles": articles_by_key,
+                "primary_source_identifiers": _model_dump(
+                    getattr(verdict, "primary_source_identifiers", [])
+                ),
             }
 
             handle.write(json.dumps(record, ensure_ascii=True))
@@ -249,7 +255,11 @@ def load_sentence_evaluations_jsonl(
     Returns:
         List of (Sentence, FinalVerdict, list[SentenceEvaluation]).
     """
-    from refweaver.evaluation_models import FinalVerdict, SentenceEvaluation
+    from refweaver.evaluation_models import (
+        FinalVerdict,
+        SentenceEvaluation,
+        SourceIdentifier,
+    )
     from refweaver.models import Article, Sentence
 
     results: list[tuple[Any, Any, list[Any]]] = []
@@ -262,6 +272,16 @@ def load_sentence_evaluations_jsonl(
             record = json.loads(line)
             sentence = Sentence.model_validate(record["sentence"])
             verdict = FinalVerdict.model_validate(record["verdict"])
+            primary_identifiers = record.get("primary_source_identifiers")
+            if primary_identifiers:
+                verdict = verdict.model_copy(
+                    update={
+                        "primary_source_identifiers": [
+                            SourceIdentifier.model_validate(identifier)
+                            for identifier in primary_identifiers
+                        ]
+                    }
+                )
 
             articles_by_key = {
                 key: Article.model_validate(value)
