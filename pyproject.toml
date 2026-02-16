@@ -4,10 +4,8 @@ version = "0.1.0"
 description = "Scientific manuscript reference analysis tool"
 readme = "README.md"
 requires-python = ">=3.13"
-license = {text = "MIT"}
-authors = [
-    {name = "Diego Muñoz"}
-]
+license = { text = "MIT" }
+authors = [{ name = "Diego Muñoz" }]
 keywords = ["scientific", "manuscript", "references", "citations", "academic"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -74,8 +72,8 @@ select = [
     "T20",
 ]
 ignore = [
-    "E501",  # Line length handled by formatter
-    "N812",  # Lowercase imported as non-lowercase (needed for selenium expected_conditions as EC)
+    "E501", # Line length handled by formatter
+    "N812", # Lowercase imported as non-lowercase (needed for selenium expected_conditions as EC)
 ]
 
 [tool.ruff.format]
@@ -84,7 +82,7 @@ indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "auto"
 
-[tool.ruff.link.isort]
+[tool.ruff.lint.isort]
 combine-as-imports = true
 
 [tool.mypy]
