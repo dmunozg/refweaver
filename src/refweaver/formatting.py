@@ -381,10 +381,12 @@ def _article_key(article: object | None) -> str:
     return f"hash:{hashlib.sha1(fingerprint.encode('utf-8')).hexdigest()}"
 
 
-def _model_dump(obj: Any) -> dict[str, Any]:
-    """Best-effort conversion of a model or dict into a JSON-safe dict."""
+def _model_dump(obj: Any) -> Any:
+    """Best-effort conversion of a model or value into JSON-safe data."""
     if hasattr(obj, "model_dump"):
         return obj.model_dump(mode="json")
     if isinstance(obj, dict):
-        return obj
-    return {"value": obj}
+        return {key: _model_dump(value) for key, value in obj.items()}
+    if isinstance(obj, (list, tuple, set)):
+        return [_model_dump(item) for item in obj]
+    return obj

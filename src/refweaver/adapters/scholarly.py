@@ -7,6 +7,7 @@ from scholarly import ProxyGenerator, scholarly
 
 from refweaver.models import Article
 from refweaver.rate_limit import rate_limit
+from refweaver.retry import retry_call
 
 
 class GoogleScholarAdapter:
@@ -187,7 +188,7 @@ class GoogleScholarAdapter:
         try:
             # Get search results
             rate_limit("google_scholar")
-            search_results = scholarly.search_pubs(query)
+            search_results = retry_call(scholarly.search_pubs, query)
 
             for i, publication in enumerate(search_results):
                 if i >= limit:
@@ -197,7 +198,7 @@ class GoogleScholarAdapter:
                     # Optionally fill in more details (slower)
                     if fill:
                         rate_limit("google_scholar")
-                        publication = cast(Any, scholarly.fill(cast(Any, publication)))
+                        publication = cast(Any, retry_call(scholarly.fill, cast(Any, publication)))
 
                     article = self._to_article(publication)
                     articles.append(article)
@@ -232,7 +233,7 @@ class GoogleScholarAdapter:
                 doi = doi[15:]
 
             # Search for the DOI
-            search_results = scholarly.search_pubs(doi)
+            search_results = retry_call(scholarly.search_pubs, doi)
 
             for publication in search_results:
                 try:
@@ -263,7 +264,7 @@ class GoogleScholarAdapter:
             # Google Scholar IDs are tricky - we search and match
             # This is a best-effort approach
             rate_limit("google_scholar")
-            search_results = scholarly.search_pubs(pub_id)
+            search_results = retry_call(scholarly.search_pubs, pub_id)
 
             for publication in search_results:
                 try:

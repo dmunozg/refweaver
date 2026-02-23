@@ -9,6 +9,7 @@ from pydantic import HttpUrl
 
 from refweaver.models import Article
 from refweaver.rate_limit import rate_limit
+from refweaver.retry import retry_call
 from refweaver.timing import run_with_timeout, timed
 
 DEFAULT_SEARCH_TIMEOUT = 15.0  # seconds
@@ -225,7 +226,7 @@ class OpenAlexAdapter:
     def _do_search(self, query: str, limit: int) -> list[Article]:
         """Internal search method (without timeout wrapper)."""
         rate_limit("openalex")
-        works = Works().search(query).get(per_page=limit)
+        works = retry_call(Works().search(query).get, per_page=limit)
 
         articles: list[Article] = []
         for work in works:
@@ -278,7 +279,7 @@ class OpenAlexAdapter:
             elif doi.startswith("http://doi.org/"):
                 doi = doi[15:]
 
-            work: Any = Works()[f"doi:{doi}"]
+            work: Any = retry_call(lambda: Works()[f"doi:{doi}"])
             return self._to_article(work)
         except Exception:
             return None
@@ -298,7 +299,7 @@ class OpenAlexAdapter:
             if not work_id.startswith("W") and not work_id.startswith("https://"):
                 work_id = f"W{work_id}"
 
-            work: Any = Works()[work_id]
+            work: Any = retry_call(lambda: Works()[work_id])
             return self._to_article(work)
         except Exception:
             return None

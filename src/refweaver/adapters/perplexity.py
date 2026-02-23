@@ -10,6 +10,7 @@ from pydantic import HttpUrl
 
 from refweaver.models import Article
 from refweaver.rate_limit import rate_limit
+from refweaver.retry import retry_call
 from refweaver.timing import run_with_timeout, timed
 
 DEFAULT_SEARCH_TIMEOUT = 30.0  # seconds - Perplexity is slower due to LLM generation
@@ -77,7 +78,8 @@ class PerplexityAdapter:
         }
 
         rate_limit("perplexity")
-        response = requests.post(
+        response = retry_call(
+            requests.post,
             f"{self.base_url}/chat/completions",
             headers=headers,
             json=payload,

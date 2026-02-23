@@ -8,6 +8,7 @@ from semanticscholar import SemanticScholar
 
 from refweaver.models import Article
 from refweaver.rate_limit import rate_limit
+from refweaver.retry import retry_call
 from refweaver.timing import run_with_timeout, timed
 
 DEFAULT_SEARCH_TIMEOUT = 15.0  # seconds
@@ -203,7 +204,8 @@ class SemanticScholarAdapter:
     ) -> list[Article]:
         """Internal search method (without timeout wrapper)."""
         rate_limit("semantic_scholar")
-        results: Any = self.client.search_paper(
+        results: Any = retry_call(
+            self.client.search_paper,
             query=query,
             limit=limit,
             fields=fields,
@@ -266,7 +268,7 @@ class SemanticScholarAdapter:
         """
         try:
             rate_limit("semantic_scholar")
-            paper: Any = self.client.get_paper(doi)
+            paper: Any = retry_call(self.client.get_paper, doi)
             return self._to_article(paper)
         except Exception:
             return None
@@ -282,7 +284,7 @@ class SemanticScholarAdapter:
         """
         try:
             rate_limit("semantic_scholar")
-            paper: Any = self.client.get_paper(f"CorpusId:{paper_id}")
+            paper: Any = retry_call(self.client.get_paper, f"CorpusId:{paper_id}")
             return self._to_article(paper)
         except Exception:
             return None
