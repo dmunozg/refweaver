@@ -19,7 +19,7 @@ Potential of mean force profiles calculated across a POPC/POPG bilayer, combined
 """
 
 # A shorter sample with clear reference needs
-SHORT_SAMPLE = """Climate change has accelerated glacier retreat globally. The Greenland ice sheet lost approximately 280 gigatons of mass per year between 2002 and 2016. This rate of melting is unprecedented in at least the last 1,000 years according to ice core records. Rising sea levels threaten coastal communities worldwide, with projections suggesting up to 1 meter of sea level rise by 2100. Sea levels have been falling steadily for decades.
+SHORT_SAMPLE = """Climate change has accelerated glacier retreat globally. The Greenland ice sheet lost approximately 280 gigatons of mass per year between 2002 and 2016. This rate of melting is unprecedented in at least the last 1,000 years according to ice core records. Rising sea levels threaten coastal communities worldwide, with projections suggesting up to 1 meter of sea level rise by 2100.
 """
 
 # Sample with tricky sentence boundaries (abbreviations, decimals)

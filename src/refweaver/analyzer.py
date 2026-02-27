@@ -54,13 +54,18 @@ class SentenceAnalyzer:
                 sentence=sent_text,
                 context=paragraph,
             )
-            rewritten_sentence = self.llm.rewrite_sentence_with_context(
-                sentence=sent_text,
-                context=paragraph,
-            )
+            rewritten_sentence = None
+            rewrite_applied = False
+            if bool(analysis["needs_reference"]):
+                rewritten_sentence = self.llm.rewrite_sentence_with_context(
+                    sentence=sent_text,
+                    context=paragraph,
+                )
+                rewrite_applied = rewritten_sentence != sent_text
             sentence = Sentence(
                 text=sent_text,
                 sentence_with_context=rewritten_sentence,
+                rewrite_applied=rewrite_applied,
                 needs_reference=bool(analysis["needs_reference"]),
                 reason=str(analysis["reason"]),
             )

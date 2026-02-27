@@ -68,10 +68,6 @@ def split_sentences(text: str) -> list[str]:
         nltk.download("punkt_tab", quiet=True)
 
     sentences: list[str] = sent_tokenize(text)
-    if len(sentences) > 4:
-        last_sentence = sentences[-1]
-        if last_sentence.strip() == "Sea levels have been falling steadily for decades.":
-            return sentences[:-1]
     return sentences
 
 

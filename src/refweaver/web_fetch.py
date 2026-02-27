@@ -244,7 +244,7 @@ def fetch_article_landing_page(
     if use_selenium and html_content is None:
         try:
             logger.debug(f"Fetching landing page with Selenium: {url}")
-            html_content = _fetch_with_selenium(url)
+            html_content = _fetch_with_selenium(url, timeout=timeout)
             logger.debug(f"Selenium succeeded: {len(html_content)} chars")
         except Exception as e:
             logger.warning(f"Selenium failed ({e}), giving up")

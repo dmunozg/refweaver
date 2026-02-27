@@ -14,7 +14,6 @@ class TestSentenceAnalyzer:
     def test_analyze_paragraph_single_sentence_no_ref(self):
         """Test analyzing a single sentence that doesn't need a reference."""
         mock_llm = MagicMock()
-        mock_llm.rewrite_sentence_with_context.return_value = "This is a simple sentence."
         mock_llm.analyze_sentence_needs_reference.return_value = {
             "needs_reference": False,
             "reason": "General statement, no specific claim",
@@ -25,7 +24,8 @@ class TestSentenceAnalyzer:
 
         assert len(result) == 1
         assert result[0].text == "This is a simple sentence."
-        assert result[0].sentence_with_context == "This is a simple sentence."
+        assert result[0].sentence_with_context is None
+        assert result[0].rewrite_applied is False
         assert result[0].needs_reference is False
         assert "General statement" in result[0].reason
 
@@ -44,14 +44,18 @@ class TestSentenceAnalyzer:
         assert len(result) == 1
         assert result[0].text == "The enzyme showed 95% efficiency."
         assert result[0].sentence_with_context == "The enzyme showed 95% efficiency."
+        assert result[0].rewrite_applied is False
         assert result[0].needs_reference is True
         assert "statistic" in result[0].reason
+        mock_llm.rewrite_sentence_with_context.assert_called_once_with(
+            sentence="The enzyme showed 95% efficiency.",
+            context="The enzyme showed 95% efficiency.",
+        )
 
     def test_analyze_paragraph_multiple_sentences(self):
         """Test analyzing a paragraph with multiple sentences."""
         mock_llm = MagicMock()
         mock_llm.rewrite_sentence_with_context.side_effect = [
-            "This is the introduction.",
             "The paragraph makes a specific claim.",
             "95% of studies agree.",
         ]
@@ -69,11 +73,13 @@ class TestSentenceAnalyzer:
         assert result[0].needs_reference is False
         assert result[1].needs_reference is True
         assert result[2].needs_reference is True
+        assert result[1].rewrite_applied is True
+        assert result[2].rewrite_applied is False
+        assert mock_llm.rewrite_sentence_with_context.call_count == 2
 
     def test_analyze_paragraph_llm_called_with_context(self):
         """Test that LLM is called with proper context."""
         mock_llm = MagicMock()
-        mock_llm.rewrite_sentence_with_context.return_value = "This is a test sentence."
         mock_llm.analyze_sentence_needs_reference.return_value = {
             "needs_reference": False,
             "reason": "Test",
@@ -87,15 +93,11 @@ class TestSentenceAnalyzer:
         call_kwargs = mock_llm.analyze_sentence_needs_reference.call_args[1]
         assert call_kwargs["sentence"] == "This is a test sentence."
         assert call_kwargs["context"] == paragraph
-        mock_llm.rewrite_sentence_with_context.assert_called_once_with(
-            sentence="This is a test sentence.",
-            context=paragraph,
-        )
+        mock_llm.rewrite_sentence_with_context.assert_not_called()
 
     def test_analyze_sentences_multiple_paragraphs(self):
         """Test analyzing text with multiple paragraphs."""
         mock_llm = MagicMock()
-        mock_llm.rewrite_sentence_with_context.return_value = "First paragraph."
         mock_llm.analyze_sentence_needs_reference.return_value = {
             "needs_reference": False,
             "reason": "Test",
@@ -114,6 +116,7 @@ class TestSentenceAnalyzer:
         sentence = Sentence(
             text="Test sentence.",
             sentence_with_context="Test sentence.",
+            rewrite_applied=False,
             needs_reference=True,
             reason="Needs citation",
         )
@@ -128,18 +131,21 @@ class TestSentenceAnalyzer:
         s1 = Sentence(
             text="Test sentence.",
             sentence_with_context="Test sentence.",
+            rewrite_applied=False,
             needs_reference=True,
             reason="Needs citation",
         )
         s2 = Sentence(
             text="Test sentence.",
             sentence_with_context="Test sentence.",
+            rewrite_applied=False,
             needs_reference=True,
             reason="Needs citation",
         )
         s3 = Sentence(
             text="Different sentence.",
             sentence_with_context="Different sentence.",
+            rewrite_applied=False,
             needs_reference=True,
             reason="Needs citation",
         )
@@ -180,6 +186,7 @@ class TestGenerateSearchKeywords:
         sentence_obj = Sentence(
             text="Gold nanoparticles stabilize enzymes effectively.",
             sentence_with_context="Gold nanoparticles stabilize enzymes effectively.",
+            rewrite_applied=False,
             needs_reference=True,
             reason="Specific claim about enzyme stabilization",
         )
@@ -309,6 +316,7 @@ class TestEvaluateArticleRelevance:
             sentence_with_context=(
                 "Gold nanoparticles show 90% enzyme stabilization at high temperatures."
             ),
+            rewrite_applied=False,
             needs_reference=True,
             reason="Specific statistic needing citation",
         )

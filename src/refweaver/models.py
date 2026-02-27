@@ -15,6 +15,10 @@ class Sentence(BaseModel):
         default=None,
         description=("Self-contained rewrite of the sentence with context resolved, if available"),
     )
+    rewrite_applied: bool = Field(
+        default=False,
+        description="Whether sentence_with_context was rewritten from the original text",
+    )
     needs_reference: bool = Field(
         ...,
         description="Whether this sentence requires a reference/citation",

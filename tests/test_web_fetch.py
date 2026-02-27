@@ -87,7 +87,9 @@ class TestFetchArticleLandingPage:
         """Test successful fetch and text extraction."""
         mock_response = MagicMock()
         mock_response.headers = {"content-type": "text/html"}
-        mock_response.text = "<html><body><article><p>Article content here</p></article></body></html>"
+        mock_response.text = (
+            "<html><body><article><p>Article content here</p></article></body></html>"
+        )
         mock_get.return_value = mock_response
 
         article = Article(
@@ -201,7 +203,7 @@ class TestFetchArticleLandingPage:
 
         assert result is not None
         assert "Selenium fetched content" in result
-        mock_selenium.assert_called_once_with("https://example.com/article")
+        mock_selenium.assert_called_once_with("https://example.com/article", timeout=30)
 
     @patch("refweaver.web_fetch.requests.get")
     @patch("refweaver.web_fetch._fetch_with_selenium")
