@@ -3,13 +3,16 @@
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from refweaver.api.dependencies import get_user_id, verify_api_key
+from refweaver.api.dependencies import get_user_id, rate_limit_user, verify_api_key
 from refweaver.api.settings import SETTINGS
 from refweaver.enrich import ArticleEnricher
 from refweaver.models import Article
 from refweaver.search import UnifiedSearch
 
-router = APIRouter(tags=["search"], dependencies=[Depends(verify_api_key)])
+router = APIRouter(
+    tags=["search"],
+    dependencies=[Depends(verify_api_key), Depends(rate_limit_user)],
+)
 
 
 class SearchRequest(BaseModel):

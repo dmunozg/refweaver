@@ -16,6 +16,9 @@ class ApiSettings(BaseModel):
     max_input_tokens: int = Field(default=64000)
     run_async_threshold: int = Field(default=2000)
     database_url: str = Field(default=os.getenv("DATABASE_URL", "sqlite:///./refweaver.db"))
+    rate_limit_per_minute: int = Field(
+        default=int(os.getenv("REFWEAVER_RATE_LIMIT_PER_MINUTE", "0"))
+    )
     openalex_email: str | None = Field(default=os.getenv("OPENALEX_EMAIL"))
     semantic_scholar_api_key: str | None = Field(default=os.getenv("SEMANTIC_SCHOLAR_API_KEY"))
 

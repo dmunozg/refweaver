@@ -6,7 +6,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends
 
-from refweaver.api.dependencies import get_user_id, verify_api_key
+from refweaver.api.dependencies import get_user_id, rate_limit_user, verify_api_key
 from refweaver.api.errors import http_error
 from refweaver.api.schemas import AnalyzeRequest, AnalyzeResponse
 from refweaver.api.settings import SETTINGS
@@ -14,7 +14,10 @@ from refweaver.jobs import analyze_paragraph_job
 from refweaver.queue import enqueue_job
 from refweaver.text_utils import validate_text_length
 
-router = APIRouter(tags=["analysis"], dependencies=[Depends(verify_api_key)])
+router = APIRouter(
+    tags=["analysis"],
+    dependencies=[Depends(verify_api_key), Depends(rate_limit_user)],
+)
 
 
 @router.post("/analyze", response_model=AnalyzeResponse)

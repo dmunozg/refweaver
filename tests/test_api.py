@@ -12,7 +12,7 @@ from refweaver.api.schemas import ErrorResponse
 
 def test_health_endpoint_ok() -> None:
     client = TestClient(app)
-    response = client.get("/health")
+    response = client.get("/health", headers={"X-User-Id": "user-1"})
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == {"status": "ok"}
 
@@ -58,6 +58,12 @@ def test_search_requires_user_header() -> None:
     assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
+def test_jobs_requires_user_header() -> None:
+    client = TestClient(app)
+    response = client.get("/jobs/123")
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
 def test_search_basic() -> None:
     client = TestClient(app)
     with patch("refweaver.api.routes.search.UnifiedSearch") as searcher_factory:
@@ -72,3 +78,16 @@ def test_search_basic() -> None:
     assert response.status_code == status.HTTP_200_OK
     payload = response.json()
     assert "results" in payload
+
+
+def test_rate_limit_enforced() -> None:
+    client = TestClient(app)
+    with patch("refweaver.api.dependencies.SETTINGS") as settings:
+        settings.rate_limit_per_minute = 1
+        settings.api_key = None
+        settings.api_user_header = "X-User-Id"
+        settings.api_key_header = "X-API-Key"
+        response = client.get("/health", headers={"X-User-Id": "user-1"})
+        assert response.status_code == status.HTTP_200_OK
+        response = client.get("/health", headers={"X-User-Id": "user-1"})
+        assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
