@@ -75,7 +75,9 @@ def export_analysis_results(
     filtered_results = []
     for result in results:
         verdict = result.get("assessment", {}).get("verdict", "")
-        if verdict in ("SUPPORTS", "PARTIALLY_SUPPORTS") or include_insufficient and verdict == "INSUFFICIENT_INFO":
+        if verdict in ("SUPPORTS", "PARTIALLY_SUPPORTS") or (
+            include_insufficient and verdict == "INSUFFICIENT_INFO"
+        ):
             filtered_results.append(result)
 
     # Add notes about verdicts

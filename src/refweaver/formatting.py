@@ -322,7 +322,7 @@ def load_sentence_evaluations_jsonl(
 
     results: list[tuple[Any, Any, list[Any]]] = []
 
-    with open(input_path, "r", encoding="utf-8") as handle:
+    with open(input_path, encoding="utf-8") as handle:
         for line in handle:
             if not line.strip():
                 continue

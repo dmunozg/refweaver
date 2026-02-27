@@ -11,7 +11,7 @@ from loguru import logger
 T = TypeVar("T")
 
 
-def timed(func: Callable[..., T]) -> Callable[..., T]:
+def timed[T](func: Callable[..., T]) -> Callable[..., T]:
     """Decorator to log execution time of a function.
 
     Usage:
@@ -24,7 +24,7 @@ def timed(func: Callable[..., T]) -> Callable[..., T]:
     """
 
     @functools.wraps(func)
-    def wrapper(*args: Any, **kwargs: Any) -> Any:
+    def wrapper(*args: Any, **kwargs: Any) -> T:
         start = time.perf_counter()
         try:
             return func(*args, **kwargs)
@@ -35,7 +35,7 @@ def timed(func: Callable[..., T]) -> Callable[..., T]:
     return wrapper
 
 
-def timed_info(func: Callable[..., T]) -> Callable[..., T]:
+def timed_info[T](func: Callable[..., T]) -> Callable[..., T]:
     """Decorator to log execution time at INFO level.
 
     Use this for high-level operations you always want to see timing for.
@@ -50,7 +50,7 @@ def timed_info(func: Callable[..., T]) -> Callable[..., T]:
     """
 
     @functools.wraps(func)
-    def wrapper(*args: Any, **kwargs: Any) -> Any:
+    def wrapper(*args: Any, **kwargs: Any) -> T:
         start = time.perf_counter()
         try:
             return func(*args, **kwargs)

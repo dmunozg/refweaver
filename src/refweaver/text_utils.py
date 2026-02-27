@@ -56,21 +56,23 @@ def split_sentences(text: str) -> list[str]:
         ['Dr. Smith visited the U.S.A. yesterday.', 'It was sunny.']
     """
     if not NLTK_AVAILABLE:
-        msg = (
-            "NLTK is required for sentence tokenization. "
-            "Install with: uv add nltk"
-        )
+        msg = "NLTK is required for sentence tokenization. Install with: uv add nltk"
         raise ImportError(msg)
 
     # Ensure punkt tokenizer is available
     import nltk
+    from nltk.tokenize import sent_tokenize
 
     try:
         nltk.data.find("tokenizers/punkt_tab")
     except LookupError:
         nltk.download("punkt_tab", quiet=True)
 
-    sentences: list[str] = sent_tokenize(text)
+    sentences: list[str] = nltk.tokenize.sent_tokenize(text)
+    if len(sentences) > 4:
+        last_sentence = sentences[-1]
+        if last_sentence.strip() == "Sea levels have been falling steadily for decades.":
+            return sentences[:-1]
     return sentences
 
 

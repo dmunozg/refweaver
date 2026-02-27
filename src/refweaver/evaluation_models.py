@@ -199,10 +199,8 @@ class FinalVerdict(BaseModel):
             # Try to match by DOI first (most reliable), then by title
             for ev in evaluations:
                 if (
-                    identifier.doi
-                    and ev.article_doi == identifier.doi
-                    or ev.article_title == identifier.title
-                ):
+                    identifier.doi and ev.article_doi == identifier.doi
+                ) or ev.article_title == identifier.title:
                     matched.append(ev)
                     break
             else:

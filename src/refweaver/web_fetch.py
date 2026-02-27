@@ -57,6 +57,7 @@ def _fetch_with_selenium(url: str, timeout: int = 30) -> str:
 
         # Give extra time for JavaScript to render content
         import time
+
         time.sleep(2)
 
         html = driver.page_source
@@ -94,10 +95,7 @@ def _fetch_with_requests(url: str, timeout: int) -> str:
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
             "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         ),
-        "Accept": (
-            "text/html,application/xhtml+xml,application/xml;q=0.9,"
-            "image/webp,*/*;q=0.8"
-        ),
+        "Accept": ("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"),
         "Accept-Language": "en-US,en;q=0.5",
     }
 
@@ -162,7 +160,7 @@ def extract_text_from_html(html: str) -> str:
 def fetch_article_landing_page(
     article: "Article",
     timeout: int = 30,
-    use_selenium: bool = True,
+    use_selenium: bool = False,
 ) -> str | None:
     """Fetch and extract text content from an article's landing page.
 
@@ -178,9 +176,7 @@ def fetch_article_landing_page(
         Extracted text content, or None if fetching failed.
     """
     if not article.open_access:
-        logger.debug(
-            f"Article '{article.title[:50]}...' is not open access, skipping fetch"
-        )
+        logger.debug(f"Article '{article.title[:50]}...' is not open access, skipping fetch")
         return None
 
     # Determine URL to fetch
@@ -198,19 +194,8 @@ def fetch_article_landing_page(
 
     html_content: str | None = None
 
-    # Strategy 1: Use Selenium (handles JavaScript-heavy sites)
-    if use_selenium:
-        try:
-            logger.debug(f"Fetching landing page with Selenium: {url}")
-            html_content = _fetch_with_selenium(url, timeout)
-            logger.debug(f"Selenium succeeded: {len(html_content)} chars")
-        except Exception as e:
-            logger.warning(f"Selenium failed ({e}), falling back to requests")
-            # Fall back to requests
-            use_selenium = False
-
-    # Strategy 2: Use requests (faster but may not work on all sites)
-    if not use_selenium or html_content is None:
+    # Strategy 1: Use requests (faster but may not work on JS-heavy sites)
+    if not use_selenium:
         try:
             logger.debug(f"Fetching landing page with requests: {url}")
             response = requests.get(
@@ -243,15 +228,26 @@ def fetch_article_landing_page(
             # Detect "JavaScript required" pages
             if len(html_content) < 3000:
                 soup_text = html_content.lower()
-                if "javascript" in soup_text and (
-                    "enable" in soup_text or "required" in soup_text
-                ):
-                    logger.warning(
-                        "Page appears to require JavaScript but Selenium not used"
-                    )
+                if "javascript" in soup_text and ("enable" in soup_text or "required" in soup_text):
+                    logger.warning("Page appears to require JavaScript but Selenium not used")
 
         except requests.RequestException as e:
             logger.error(f"Failed to fetch landing page {url}: {e}")
+            response = getattr(e, "response", None)
+            status_code = getattr(response, "status_code", None)
+            if status_code == 403:
+                use_selenium = True
+            else:
+                return None
+
+    # Strategy 2: Use Selenium (handles JavaScript-heavy sites)
+    if use_selenium and html_content is None:
+        try:
+            logger.debug(f"Fetching landing page with Selenium: {url}")
+            html_content = _fetch_with_selenium(url)
+            logger.debug(f"Selenium succeeded: {len(html_content)} chars")
+        except Exception as e:
+            logger.warning(f"Selenium failed ({e}), giving up")
             return None
 
     # Extract text from HTML

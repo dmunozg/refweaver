@@ -55,7 +55,7 @@ class Article(BaseModel):
 
     # Citation details
     volume: str | None = None
-    issue: str | None = Field(default=None, validation_alias="number")
+    issue: str | None = Field(default=None)
     pages: str | None = None
     doi: str | None = None
 
@@ -171,7 +171,7 @@ class Article(BaseModel):
         elif entry_type == "misc":
             # For webpages and other non-standard sources
             if self.url:
-                fields["howpublished"] = f"\\url{{{str(self.url)}}}"
+                fields["howpublished"] = f"\\url{{{self.url!s}}}"
             elif self.howpublished:
                 fields["howpublished"] = self.howpublished
 

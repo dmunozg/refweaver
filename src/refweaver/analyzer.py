@@ -112,7 +112,76 @@ class SentenceAnalyzer:
         sentence_text = sentence.text if isinstance(sentence, Sentence) else sentence
 
         # Delegate to LLM client which uses pydantic-ai structured output
-        return self.llm.generate_search_keywords(sentence_text, context=context)
+        if context:
+            return self.llm.generate_search_keywords(sentence_text, context=context)
+        return self.llm.generate_search_keywords(sentence_text)
+
+    def evaluate_article_relevance(
+        self,
+        sentence: str | Sentence,
+        article: Article,
+    ) -> dict[str, str | float | None]:
+        """Evaluate how an article relates to a sentence using the abstract.
+
+        Args:
+            sentence: The claim to evaluate (str or Sentence object).
+            article: Article metadata for evaluation.
+
+        Returns:
+            Dict with verdict, confidence, reasoning, and suggested modification.
+        """
+        sentence_text = sentence.text if isinstance(sentence, Sentence) else sentence
+        return self.llm.evaluate_article_relevance(
+            sentence=sentence_text,
+            article_title=article.title,
+            article_authors=article.authors,
+            article_year=article.year,
+            article_abstract=article.abstract,
+        )
+
+    def evaluate_article_with_landing_page(
+        self,
+        sentence: str | Sentence,
+        article: Article,
+        timeout: int = 30,
+    ) -> dict[str, str | float | None]:
+        """Evaluate using abstract first, optionally falling back to landing page.
+
+        Returns evaluation dict including an `evaluation_source` key.
+        """
+        sentence_text = sentence.text if isinstance(sentence, Sentence) else sentence
+        abstract_result = self.llm.evaluate_article_relevance(
+            sentence=sentence_text,
+            article_title=article.title,
+            article_authors=article.authors,
+            article_year=article.year,
+            article_abstract=article.abstract,
+        )
+        evaluation_source = "abstract"
+
+        if article.open_access and abstract_result.get("verdict") in {
+            "INSUFFICIENT_INFO",
+            "PARTIALLY_SUPPORTS",
+        }:
+            from refweaver.web_fetch import fetch_article_landing_page
+
+            landing_text = fetch_article_landing_page(article, timeout=timeout)
+            if landing_text and abstract_result.get("verdict") in {
+                "INSUFFICIENT_INFO",
+                "PARTIALLY_SUPPORTS",
+            }:
+                fulltext_result = self.llm.evaluate_article_relevance_fulltext(
+                    sentence=sentence_text,
+                    article_title=article.title,
+                    article_authors=article.authors,
+                    article_year=article.year,
+                    fulltext_content=landing_text,
+                )
+                fulltext_result["evaluation_source"] = "fulltext"
+                return fulltext_result
+
+        abstract_result["evaluation_source"] = evaluation_source
+        return abstract_result
 
     def evaluate_articles(
         self,

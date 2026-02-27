@@ -12,7 +12,7 @@ from loguru import logger
 T = TypeVar("T")
 
 
-def retry_call(
+def retry_call[T](
     func: Callable[..., T],
     *args: object,
     retries: int = 2,
