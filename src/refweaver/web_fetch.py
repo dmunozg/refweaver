@@ -233,8 +233,8 @@ def fetch_article_landing_page(
 
         except requests.RequestException as e:
             logger.error(f"Failed to fetch landing page {url}: {e}")
-            response = getattr(e, "response", None)
-            status_code = getattr(response, "status_code", None)
+            error_response: requests.Response | None = getattr(e, "response", None)
+            status_code = error_response.status_code if error_response else None
             if status_code == 403:
                 use_selenium = True
             else:

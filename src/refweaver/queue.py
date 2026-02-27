@@ -18,7 +18,7 @@ def get_redis_connection() -> Redis:
 
 
 def get_queue(name: str | None = None) -> Queue:
-    queue_name = name or os.getenv("REFWEAVER_QUEUE_NAME", "refweaver")
+    queue_name = name if name is not None else os.getenv("REFWEAVER_QUEUE_NAME", "refweaver")
     return Queue(queue_name, connection=get_redis_connection())
 
 
@@ -32,7 +32,7 @@ def enqueue_job(func: str, *args: Any, **kwargs: Any) -> str:
 
     queue = get_queue()
     job = queue.enqueue(func, *args, **kwargs, job_timeout=timeout)
-    return job.id
+    return str(job.id)
 
 
 def fetch_job(job_id: str) -> dict[str, Any]:

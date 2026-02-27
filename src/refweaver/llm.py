@@ -6,7 +6,7 @@ via Pydantic models.
 
 import asyncio
 import os
-from typing import Any
+from typing import Any, cast
 
 import requests
 from loguru import logger
@@ -307,13 +307,13 @@ class LLMClient:
             )
         return self._model
 
-    def _run_agent_sync(self, agent: Agent, prompt: str) -> Any:
+    def _run_agent_sync(self, agent: Any, prompt: str) -> Any:
         return retry_call(
             lambda: run_with_timeout(agent.run_sync, self.request_timeout_seconds, prompt),
             retries=self.request_retries,
         )
 
-    async def _run_agent_async(self, agent: Agent, prompt: str) -> Any:
+    async def _run_agent_async(self, agent: Any, prompt: str) -> Any:
         attempts = self.request_retries + 1
         for attempt in range(1, attempts + 1):
             try:
@@ -361,7 +361,8 @@ class LLMClient:
         try:
             logger.debug(f"Generating keywords for: {sentence[:60]}...")
             response = self._run_agent_sync(agent, prompt)
-            keywords = response.output.keywords
+            result = cast(SearchKeywords, response.output)
+            keywords = result.keywords
             logger.info(f"Generated {len(keywords)} keywords: {keywords}")
             return keywords
         except Exception as e:
@@ -391,7 +392,8 @@ class LLMClient:
         try:
             logger.debug(f"Generating keywords (async) for: {sentence[:60]}...")
             response = await self._run_agent_async(agent, prompt)
-            keywords = response.output.keywords
+            result = cast(SearchKeywords, response.output)
+            keywords = result.keywords
             logger.info(f"Generated {len(keywords)} keywords: {keywords}")
             return keywords
         except Exception as e:
@@ -443,7 +445,7 @@ Guidelines for sentences that DON'T need references:
         try:
             logger.debug(f"Analyzing sentence: {sentence[:80]}...")
             response = self._run_agent_sync(agent, prompt)
-            result = response.output
+            result = cast(SentenceAnalysis, response.output)
             logger.debug(f"Analysis result: needs_reference={result.needs_reference}")
             return {
                 "needs_reference": result.needs_reference,
@@ -493,7 +495,7 @@ Guidelines for sentences that DON'T need references:
         try:
             logger.debug(f"Analyzing sentence (async): {sentence[:80]}...")
             response = await self._run_agent_async(agent, prompt)
-            result = response.output
+            result = cast(SentenceAnalysis, response.output)
             return {
                 "needs_reference": result.needs_reference,
                 "reason": result.reason,
@@ -570,7 +572,7 @@ If the article suggests a modification to the original claim, provide the revise
         try:
             logger.debug(f"Evaluating article '{article_title[:50]}...' from abstract")
             response = self._run_agent_sync(agent, prompt)
-            result = response.output
+            result = cast(ArticleRelevance, response.output)
             logger.info(
                 f"Article evaluation: verdict={result.verdict}, confidence={result.confidence:.2f}"
             )
@@ -639,7 +641,7 @@ If the article suggests a modification to the original claim, provide the revise
         try:
             logger.debug(f"Evaluating article (async) '{article_title[:50]}...' from abstract")
             response = await self._run_agent_async(agent, prompt)
-            result = response.output
+            result = cast(ArticleRelevance, response.output)
             return {
                 "verdict": result.verdict,
                 "confidence": result.confidence,
@@ -724,7 +726,7 @@ If the article suggests a modification to the original claim, provide the revise
         try:
             logger.debug(f"Evaluating full text of '{article_title[:50]}...'")
             response = self._run_agent_sync(agent, prompt)
-            result = response.output
+            result = cast(ArticleRelevance, response.output)
             logger.info(
                 f"Full-text evaluation: verdict={result.verdict}, "
                 f"confidence={result.confidence:.2f}"
@@ -798,7 +800,7 @@ If the article suggests a modification, provide revised wording."""
         try:
             logger.debug(f"Evaluating full text (async) of '{article_title[:50]}...'")
             response = await self._run_agent_async(agent, prompt)
-            result = response.output
+            result = cast(ArticleRelevance, response.output)
             return {
                 "verdict": result.verdict,
                 "confidence": result.confidence,
@@ -857,7 +859,7 @@ If no abstract is found, set found=false."""
                     f"Successfully extracted abstract ({len(result.abstract)} chars) "
                     f"for: {article_title[:50]}..."
                 )
-                return result.abstract
+                return str(result.abstract)
             else:
                 logger.info(f"No abstract found for: {article_title[:50]}...")
                 return None
@@ -899,7 +901,7 @@ If no abstract is found, set found=false."""
             result = response.output
 
             if result.found and result.abstract:
-                return result.abstract
+                return str(result.abstract)
             else:
                 return None
 
