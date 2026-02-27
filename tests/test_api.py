@@ -100,6 +100,18 @@ def test_search_rejects_empty_query() -> None:
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
 
+def test_enrich_requires_user_header() -> None:
+    client = TestClient(app)
+    response = client.post("/enrich", json={"articles": []})
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+def test_report_requires_user_header() -> None:
+    client = TestClient(app)
+    response = client.post("/report", json={"run_id": "run"})
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
 def test_rate_limit_enforced() -> None:
     client = TestClient(app)
     with patch("refweaver.api.dependencies.SETTINGS") as settings:
