@@ -1,9 +1,13 @@
 """Tests for text processing utilities."""
 
+import pytest
+
 from refweaver.text_utils import (
+    count_tokens_fast,
     preprocess_manuscript,
     split_paragraphs,
     split_sentences,
+    validate_text_length,
 )
 from tests.fixtures.sample_texts import (
     MULTIPLE_PARAGRAPH_SAMPLE,
@@ -161,3 +165,22 @@ class TestPreprocessManuscript:
         assert any("LRLLR" in sent for sent in result[0])
         assert any("smacN" in sent for sent in result[0])
         assert any("graphene oxide" in sent for sent in result[0])
+
+
+class TestTokenValidation:
+    """Tests for fast token estimation and validation."""
+
+    def test_count_tokens_fast_empty(self):
+        assert count_tokens_fast("") == 0
+
+    def test_count_tokens_fast_simple_text(self):
+        text = "One two three."
+        assert count_tokens_fast(text) >= 4
+
+    def test_validate_text_length_allows_short(self):
+        validate_text_length("short text", max_tokens=10)
+
+    def test_validate_text_length_rejects_long(self):
+        text = "word " * 100
+        with pytest.raises(ValueError):
+            validate_text_length(text, max_tokens=10)

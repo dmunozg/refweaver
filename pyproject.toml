@@ -30,6 +30,8 @@ dependencies = [
     "pymupdf>=1.23.0",
     "redis>=5.0.0",
     "rq>=1.16.0",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
 ]
 
 [project.optional-dependencies]
@@ -45,6 +47,7 @@ dev = [
 [project.scripts]
 refweaver = "refweaver.__main__:main"
 refweaver-worker = "refweaver.worker:main"
+refweaver-api = "refweaver.api.main:app"
 
 [build-system]
 requires = ["hatchling"]
