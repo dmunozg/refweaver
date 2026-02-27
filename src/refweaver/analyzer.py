@@ -54,8 +54,13 @@ class SentenceAnalyzer:
                 sentence=sent_text,
                 context=paragraph,
             )
+            rewritten_sentence = self.llm.rewrite_sentence_with_context(
+                sentence=sent_text,
+                context=paragraph,
+            )
             sentence = Sentence(
                 text=sent_text,
+                sentence_with_context=rewritten_sentence,
                 needs_reference=bool(analysis["needs_reference"]),
                 reason=str(analysis["reason"]),
             )
@@ -94,7 +99,6 @@ class SentenceAnalyzer:
     def generate_search_keywords(
         self,
         sentence: str | Sentence,
-        context: str | None = None,
     ) -> list[str]:
         """Generate search keywords for finding supporting articles.
 
@@ -103,17 +107,17 @@ class SentenceAnalyzer:
 
         Args:
             sentence: The sentence needing reference support (str or Sentence object).
-            context: Optional surrounding context to disambiguate the sentence.
 
         Returns:
             List of search keyword strings optimized for academic search.
         """
         # Extract text if Sentence object is passed
-        sentence_text = sentence.text if isinstance(sentence, Sentence) else sentence
+        if isinstance(sentence, Sentence):
+            sentence_text = sentence.sentence_with_context or sentence.text
+        else:
+            sentence_text = sentence
 
         # Delegate to LLM client which uses pydantic-ai structured output
-        if context:
-            return self.llm.generate_search_keywords(sentence_text, context=context)
         return self.llm.generate_search_keywords(sentence_text)
 
     def evaluate_article_relevance(
@@ -130,7 +134,10 @@ class SentenceAnalyzer:
         Returns:
             Dict with verdict, confidence, reasoning, and suggested modification.
         """
-        sentence_text = sentence.text if isinstance(sentence, Sentence) else sentence
+        if isinstance(sentence, Sentence):
+            sentence_text = sentence.sentence_with_context or sentence.text
+        else:
+            sentence_text = sentence
         return self.llm.evaluate_article_relevance(
             sentence=sentence_text,
             article_title=article.title,
@@ -149,7 +156,10 @@ class SentenceAnalyzer:
 
         Returns evaluation dict including an `evaluation_source` key.
         """
-        sentence_text = sentence.text if isinstance(sentence, Sentence) else sentence
+        if isinstance(sentence, Sentence):
+            sentence_text = sentence.sentence_with_context or sentence.text
+        else:
+            sentence_text = sentence
         abstract_result = self.llm.evaluate_article_relevance(
             sentence=sentence_text,
             article_title=article.title,
@@ -205,7 +215,10 @@ class SentenceAnalyzer:
         Returns:
             List of SentenceEvaluation objects, sorted by combined score.
         """
-        sentence_text = sentence.text if isinstance(sentence, Sentence) else sentence
+        if isinstance(sentence, Sentence):
+            sentence_text = sentence.sentence_with_context or sentence.text
+        else:
+            sentence_text = sentence
 
         logger.info(f"Evaluating {len(articles)} articles for: {sentence_text[:60]}...")
 
@@ -317,7 +330,10 @@ class SentenceAnalyzer:
         """
         from refweaver.evaluation_models import FinalVerdict
 
-        sentence_text = sentence.text if isinstance(sentence, Sentence) else sentence
+        if isinstance(sentence, Sentence):
+            sentence_text = sentence.sentence_with_context or sentence.text
+        else:
+            sentence_text = sentence
 
         # Filter to only relevant evaluations with stance
         relevant_with_stance = [e for e in evaluations if e.is_relevant and e.stance is not None]

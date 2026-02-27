@@ -28,7 +28,11 @@ def analyze_paragraph_job(
     serialized_results: list[dict[str, Any]] = []
     for sentence, verdict, evaluations in results:
         sentence_payload = sentence.model_dump(mode="json")
-        sentence_text = sentence.text if isinstance(sentence, Sentence) else str(sentence)
+        sentence_text = (
+            sentence.sentence_with_context or sentence.text
+            if isinstance(sentence, Sentence)
+            else str(sentence)
+        )
         serialized_results.append(
             {
                 "sentence": sentence_payload,

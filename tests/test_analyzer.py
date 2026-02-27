@@ -14,6 +14,7 @@ class TestSentenceAnalyzer:
     def test_analyze_paragraph_single_sentence_no_ref(self):
         """Test analyzing a single sentence that doesn't need a reference."""
         mock_llm = MagicMock()
+        mock_llm.rewrite_sentence_with_context.return_value = "This is a simple sentence."
         mock_llm.analyze_sentence_needs_reference.return_value = {
             "needs_reference": False,
             "reason": "General statement, no specific claim",
@@ -24,12 +25,14 @@ class TestSentenceAnalyzer:
 
         assert len(result) == 1
         assert result[0].text == "This is a simple sentence."
+        assert result[0].sentence_with_context == "This is a simple sentence."
         assert result[0].needs_reference is False
         assert "General statement" in result[0].reason
 
     def test_analyze_paragraph_single_sentence_needs_ref(self):
         """Test analyzing a single sentence that needs a reference."""
         mock_llm = MagicMock()
+        mock_llm.rewrite_sentence_with_context.return_value = "The enzyme showed 95% efficiency."
         mock_llm.analyze_sentence_needs_reference.return_value = {
             "needs_reference": True,
             "reason": "Specific statistic requiring citation",
@@ -40,12 +43,18 @@ class TestSentenceAnalyzer:
 
         assert len(result) == 1
         assert result[0].text == "The enzyme showed 95% efficiency."
+        assert result[0].sentence_with_context == "The enzyme showed 95% efficiency."
         assert result[0].needs_reference is True
         assert "statistic" in result[0].reason
 
     def test_analyze_paragraph_multiple_sentences(self):
         """Test analyzing a paragraph with multiple sentences."""
         mock_llm = MagicMock()
+        mock_llm.rewrite_sentence_with_context.side_effect = [
+            "This is the introduction.",
+            "The paragraph makes a specific claim.",
+            "95% of studies agree.",
+        ]
         mock_llm.analyze_sentence_needs_reference.side_effect = [
             {"needs_reference": False, "reason": "General intro"},
             {"needs_reference": True, "reason": "Specific claim"},
@@ -64,6 +73,7 @@ class TestSentenceAnalyzer:
     def test_analyze_paragraph_llm_called_with_context(self):
         """Test that LLM is called with proper context."""
         mock_llm = MagicMock()
+        mock_llm.rewrite_sentence_with_context.return_value = "This is a test sentence."
         mock_llm.analyze_sentence_needs_reference.return_value = {
             "needs_reference": False,
             "reason": "Test",
@@ -77,10 +87,15 @@ class TestSentenceAnalyzer:
         call_kwargs = mock_llm.analyze_sentence_needs_reference.call_args[1]
         assert call_kwargs["sentence"] == "This is a test sentence."
         assert call_kwargs["context"] == paragraph
+        mock_llm.rewrite_sentence_with_context.assert_called_once_with(
+            sentence="This is a test sentence.",
+            context=paragraph,
+        )
 
     def test_analyze_sentences_multiple_paragraphs(self):
         """Test analyzing text with multiple paragraphs."""
         mock_llm = MagicMock()
+        mock_llm.rewrite_sentence_with_context.return_value = "First paragraph."
         mock_llm.analyze_sentence_needs_reference.return_value = {
             "needs_reference": False,
             "reason": "Test",
@@ -98,6 +113,7 @@ class TestSentenceAnalyzer:
         """Test that Sentence model is immutable."""
         sentence = Sentence(
             text="Test sentence.",
+            sentence_with_context="Test sentence.",
             needs_reference=True,
             reason="Needs citation",
         )
@@ -111,16 +127,19 @@ class TestSentenceAnalyzer:
         """Test Sentence model equality."""
         s1 = Sentence(
             text="Test sentence.",
+            sentence_with_context="Test sentence.",
             needs_reference=True,
             reason="Needs citation",
         )
         s2 = Sentence(
             text="Test sentence.",
+            sentence_with_context="Test sentence.",
             needs_reference=True,
             reason="Needs citation",
         )
         s3 = Sentence(
             text="Different sentence.",
+            sentence_with_context="Different sentence.",
             needs_reference=True,
             reason="Needs citation",
         )
@@ -160,6 +179,7 @@ class TestGenerateSearchKeywords:
         analyzer = SentenceAnalyzer(llm_client=mock_llm)
         sentence_obj = Sentence(
             text="Gold nanoparticles stabilize enzymes effectively.",
+            sentence_with_context="Gold nanoparticles stabilize enzymes effectively.",
             needs_reference=True,
             reason="Specific claim about enzyme stabilization",
         )
@@ -214,7 +234,7 @@ class TestEvaluateArticleRelevance:
 
         assert result["verdict"] == "SUPPORTS"
         assert result["confidence"] == 0.85
-        assert "experimental data" in result["reasoning"]
+        assert "experimental data" in str(result["reasoning"])
         assert result["suggested_modification"] is None
 
     def test_evaluate_relevance_contradicts(self):
@@ -243,7 +263,7 @@ class TestEvaluateArticleRelevance:
 
         assert result["verdict"] == "CONTRADICTS"
         assert result["confidence"] == 0.90
-        assert "destabilize" in result["suggested_modification"]
+        assert "destabilize" in str(result["suggested_modification"])
 
     def test_evaluate_relevance_partially_supports(self):
         """Test evaluation when article partially supports the claim."""
@@ -271,7 +291,7 @@ class TestEvaluateArticleRelevance:
 
         assert result["verdict"] == "PARTIALLY_SUPPORTS"
         assert result["confidence"] == 0.75
-        assert "below 50°C" in result["suggested_modification"]
+        assert "below 50°C" in str(result["suggested_modification"])
 
     def test_evaluate_relevance_accepts_sentence_object(self):
         """Test that evaluate_article_relevance accepts Sentence object."""
@@ -286,6 +306,9 @@ class TestEvaluateArticleRelevance:
         analyzer = SentenceAnalyzer(llm_client=mock_llm)
         sentence_obj = Sentence(
             text="Gold nanoparticles show 90% enzyme stabilization at high temperatures.",
+            sentence_with_context=(
+                "Gold nanoparticles show 90% enzyme stabilization at high temperatures."
+            ),
             needs_reference=True,
             reason="Specific statistic needing citation",
         )
@@ -305,7 +328,7 @@ class TestEvaluateArticleRelevance:
         # Should extract text from Sentence object and pass article fields
         mock_llm.evaluate_article_relevance.assert_called_once()
         call_kwargs = mock_llm.evaluate_article_relevance.call_args[1]
-        assert "Gold nanoparticles show 90% enzyme stabilization" in call_kwargs["sentence"]
+        assert "Gold nanoparticles show 90% enzyme stabilization" in str(call_kwargs["sentence"])
         assert call_kwargs["article_title"] == "Supporting Article"
         assert call_kwargs["article_authors"] == ["Researcher"]
         assert call_kwargs["article_abstract"] == "Shows enzyme stabilization data."
@@ -363,7 +386,12 @@ class TestEvaluateArticleRelevance:
         call_kwargs = mock_llm.evaluate_article_relevance.call_args[1]
         assert call_kwargs["sentence"] == "Test claim."
         assert call_kwargs["article_title"] == "Specific Research Title"
-        assert call_kwargs["article_authors"] == ["Alice Smith", "Bob Jones", "Carol White", "David Lee"]
+        assert call_kwargs["article_authors"] == [
+            "Alice Smith",
+            "Bob Jones",
+            "Carol White",
+            "David Lee",
+        ]
         assert call_kwargs["article_year"] == 2023
         assert call_kwargs["article_abstract"] == "Detailed abstract here."
 
@@ -392,9 +420,7 @@ class TestEvaluateArticleWithLandingPage:
             abstract="Clear abstract.",
         )
 
-        result = analyzer.evaluate_article_with_landing_page(
-            "Test claim.", article
-        )
+        result = analyzer.evaluate_article_with_landing_page("Test claim.", article)
 
         assert result["verdict"] == "SUPPORTS"
         assert result["evaluation_source"] == "abstract"
@@ -430,9 +456,7 @@ class TestEvaluateArticleWithLandingPage:
             abstract="Brief abstract.",
         )
 
-        result = analyzer.evaluate_article_with_landing_page(
-            "Test claim.", article
-        )
+        result = analyzer.evaluate_article_with_landing_page("Test claim.", article)
 
         assert result["verdict"] == "SUPPORTS"
         assert result["evaluation_source"] == "fulltext"
@@ -460,9 +484,7 @@ class TestEvaluateArticleWithLandingPage:
             abstract="Brief abstract.",
         )
 
-        result = analyzer.evaluate_article_with_landing_page(
-            "Test claim.", article
-        )
+        result = analyzer.evaluate_article_with_landing_page("Test claim.", article)
 
         assert result["verdict"] == "INSUFFICIENT_INFO"
         assert result["evaluation_source"] == "abstract"
@@ -491,9 +513,7 @@ class TestEvaluateArticleWithLandingPage:
             abstract="Partial abstract.",
         )
 
-        result = analyzer.evaluate_article_with_landing_page(
-            "Test claim.", article
-        )
+        result = analyzer.evaluate_article_with_landing_page("Test claim.", article)
 
         assert result["verdict"] == "PARTIALLY_SUPPORTS"
         assert result["evaluation_source"] == "abstract"

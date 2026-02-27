@@ -11,6 +11,10 @@ class Sentence(BaseModel):
     """A sentence from a manuscript with reference analysis metadata."""
 
     text: str = Field(..., description="The sentence text")
+    sentence_with_context: str | None = Field(
+        default=None,
+        description=("Self-contained rewrite of the sentence with context resolved, if available"),
+    )
     needs_reference: bool = Field(
         ...,
         description="Whether this sentence requires a reference/citation",

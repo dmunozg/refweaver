@@ -63,16 +63,22 @@ def test_analyze_paragraph_with_evidence_short_sample_workflow():
     sentences = [
         Sentence(
             text="Climate change has accelerated glacier retreat globally.",
+            sentence_with_context="Climate change has accelerated glacier retreat globally.",
             needs_reference=True,
             reason="Specific claim",
         ),
         Sentence(
             text="The Greenland ice sheet lost approximately 280 gigatons of mass per year between 2002 and 2016.",
+            sentence_with_context=(
+                "The Greenland ice sheet lost approximately 280 gigatons of mass per year "
+                "between 2002 and 2016."
+            ),
             needs_reference=True,
             reason="Specific statistic",
         ),
         Sentence(
             text="Sea levels have been falling steadily for decades.",
+            sentence_with_context="Sea levels have been falling steadily for decades.",
             needs_reference=False,
             reason="General statement",
         ),
@@ -126,14 +132,14 @@ def test_analyze_paragraph_with_evidence_short_sample_workflow():
     assert results[1][2] == evaluations_two
 
     analyzer.analyze_paragraph.assert_called_once_with(SHORT_SAMPLE)
-    analyzer.generate_search_keywords.assert_any_call(sentences[0], context=SHORT_SAMPLE)
-    analyzer.generate_search_keywords.assert_any_call(sentences[1], context=SHORT_SAMPLE)
+    analyzer.generate_search_keywords.assert_any_call(sentences[0])
+    analyzer.generate_search_keywords.assert_any_call(sentences[1])
     assert searcher.search.call_count == 3
     searcher.search.assert_any_call("glacier retreat", limit_per_source=5)
     searcher.search.assert_any_call("climate change", limit_per_source=5)
     searcher.search.assert_any_call("Greenland ice sheet mass loss", limit_per_source=5)
-    perplexity_adapter.search.assert_any_call(sentences[0].text)
-    perplexity_adapter.search.assert_any_call(sentences[1].text)
+    perplexity_adapter.search.assert_any_call(sentences[0].sentence_with_context)
+    perplexity_adapter.search.assert_any_call(sentences[1].sentence_with_context)
     assert enricher.batch_enrich.call_count == 2
 
     analyzer.evaluate_articles.assert_any_call(

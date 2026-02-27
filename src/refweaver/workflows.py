@@ -53,13 +53,14 @@ def analyze_paragraph_with_evidence(
         if not sentence.needs_reference:
             continue
 
-        keywords = analyzer.generate_search_keywords(sentence, context=paragraph)
+        keywords = analyzer.generate_search_keywords(sentence)
         found_articles = []
 
         for keyword in keywords[:keyword_limit]:
             found_articles.extend(searcher.search(keyword, limit_per_source=limit_per_source))
 
-        found_articles.extend(perplexity_adapter.search(sentence.text))
+        query_text = sentence.sentence_with_context or sentence.text
+        found_articles.extend(perplexity_adapter.search(query_text))
 
         unique_articles = deduplicate_articles(found_articles)
         enriched_articles = enricher.batch_enrich(unique_articles)

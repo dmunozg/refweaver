@@ -205,6 +205,15 @@ class RelevanceScore(BaseModel):
     )
 
 
+class SentenceContextRewrite(BaseModel):
+    """Structured output for sentence context rewriting."""
+
+    rewritten_sentence: str = Field(
+        ...,
+        description="Self-contained rewrite of the sentence",
+    )
+
+
 class StanceEvaluation(BaseModel):
     """Structured output for detailed stance evaluation."""
 
@@ -331,7 +340,6 @@ class LLMClient:
     def generate_search_keywords(
         self,
         sentence: str,
-        context: str | None = None,
     ) -> list[str]:
         """Generate search keywords for finding supporting articles.
 
@@ -339,7 +347,6 @@ class LLMClient:
 
         Args:
             sentence: The sentence needing reference support.
-            context: Optional surrounding context to disambiguate the sentence.
 
         Returns:
             List of search keyword strings.
@@ -356,8 +363,7 @@ class LLMClient:
             output_retries=3,
         )
 
-        context_block = f"\nContext: {context}" if context else ""
-        prompt = f"Sentence: {sentence}{context_block}"
+        prompt = f"Sentence: {sentence}"
         try:
             logger.debug(f"Generating keywords for: {sentence[:60]}...")
             response = self._run_agent_sync(agent, prompt)
@@ -372,7 +378,6 @@ class LLMClient:
     async def generate_search_keywords_async(
         self,
         sentence: str,
-        context: str | None = None,
     ) -> list[str]:
         """Async version of generate_search_keywords."""
         agent = Agent(
@@ -387,8 +392,7 @@ class LLMClient:
             output_retries=3,
         )
 
-        context_block = f"\nContext: {context}" if context else ""
-        prompt = f"Sentence: {sentence}{context_block}"
+        prompt = f"Sentence: {sentence}"
         try:
             logger.debug(f"Generating keywords (async) for: {sentence[:60]}...")
             response = await self._run_agent_async(agent, prompt)
@@ -457,6 +461,53 @@ Guidelines for sentences that DON'T need references:
                 "needs_reference": False,
                 "reason": f"Error: {e}",
             }
+
+    def rewrite_sentence_with_context(
+        self,
+        sentence: str,
+        context: str,
+    ) -> str:
+        """Rewrite a sentence into a self-contained form using paragraph context.
+
+        Args:
+            sentence: The original sentence.
+            context: The full paragraph containing the sentence.
+
+        Returns:
+            Self-contained sentence string.
+        """
+        prompt = f"""Rewrite the following sentence so it is self-contained.
+
+Sentence: {sentence}
+
+Paragraph context:
+{context}
+
+Instructions:
+- Replace pronouns or vague references with explicit subjects from the context.
+- Preserve the original meaning and tense.
+- Do not add new claims or facts.
+- Return only the rewritten sentence."""
+
+        agent = Agent(
+            model=self._get_model(),
+            system_prompt=(
+                "You rewrite sentences so they are self-contained and unambiguous, "
+                "using provided context."
+            ),
+            output_type=SentenceContextRewrite,
+            output_retries=3,
+        )
+
+        try:
+            logger.debug(f"Rewriting sentence with context: {sentence[:80]}...")
+            response = self._run_agent_sync(agent, prompt)
+            result = cast(SentenceContextRewrite, response.output)
+            rewritten = result.rewritten_sentence.strip()
+            return rewritten or sentence
+        except Exception as e:
+            logger.error(f"Sentence rewrite failed: {e}")
+            return sentence
 
     async def analyze_sentence_needs_reference_async(
         self,
