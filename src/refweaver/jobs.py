@@ -29,15 +29,15 @@ def analyze_paragraph_job(
     for sentence, verdict, evaluations in results:
         sentence_payload = sentence.model_dump(mode="json")
         if isinstance(sentence, Sentence):
-            sentence_text = sentence.sentence_with_context or sentence.text
+            sentence_for_evaluation = sentence.sentence_with_context or sentence.text
             sentence_original_text = sentence.text
         else:
-            sentence_text = str(sentence)
-            sentence_original_text = sentence_text
+            sentence_for_evaluation = str(sentence)
+            sentence_original_text = sentence_for_evaluation
         serialized_results.append(
             {
                 "sentence": sentence_payload,
-                "sentence_text": sentence_text,
+                "sentence_for_evaluation": sentence_for_evaluation,
                 "sentence_original_text": sentence_original_text,
                 "verdict": verdict.model_dump(mode="json"),
                 "evaluations": [ev.model_dump(mode="json") for ev in evaluations],
