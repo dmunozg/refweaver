@@ -11,6 +11,7 @@ from refweaver.enrich import ArticleEnricher
 from refweaver.evaluation_models import FinalVerdict, SentenceEvaluation
 from refweaver.models import Sentence
 from refweaver.search import UnifiedSearch
+from refweaver.text_utils import validate_text_length
 
 
 def analyze_paragraph_with_evidence(
@@ -41,6 +42,7 @@ def analyze_paragraph_with_evidence(
     Returns:
         List of (Sentence, FinalVerdict, list[SentenceEvaluation]).
     """
+    validate_text_length(paragraph)
     analyzer = analyzer or SentenceAnalyzer()
     searcher = searcher or UnifiedSearch()
     perplexity_adapter = perplexity_adapter or PerplexityAdapter()

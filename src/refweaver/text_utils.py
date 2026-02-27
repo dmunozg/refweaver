@@ -4,10 +4,11 @@ Provides functions for splitting manuscripts into paragraphs and sentences,
 as well as other text preprocessing utilities.
 """
 
+import math
 import re
 
 try:
-    from nltk.tokenize import sent_tokenize
+    import nltk
 
     NLTK_AVAILABLE = True
 except ImportError:
@@ -59,7 +60,6 @@ def split_sentences(text: str) -> list[str]:
         msg = "NLTK is required for sentence tokenization. Install with: uv add nltk"
         raise ImportError(msg)
 
-    # Ensure punkt tokenizer is available
     import nltk
 
     try:
@@ -67,8 +67,27 @@ def split_sentences(text: str) -> list[str]:
     except LookupError:
         nltk.download("punkt_tab", quiet=True)
 
-    sentences: list[str] = sent_tokenize(text)
+    sentences: list[str] = nltk.tokenize.sent_tokenize(text)
     return sentences
+
+
+def count_tokens_fast(text: str) -> int:
+    """Estimate token count quickly for input validation."""
+    if not text:
+        return 0
+    word_like_tokens = re.findall(r"\w+|[^\w\s]", text)
+    approx_by_words = len(word_like_tokens)
+    approx_by_chars = math.ceil(len(text) / 4)
+    return max(approx_by_words, approx_by_chars)
+
+
+def validate_text_length(text: str, max_tokens: int = 64000) -> None:
+    """Raise ValueError when input exceeds allowed token estimate."""
+    token_count = count_tokens_fast(text)
+    if token_count > max_tokens:
+        raise ValueError(
+            f"Input is too long. Estimated {token_count} tokens exceeds limit of {max_tokens}."
+        )
 
 
 def preprocess_manuscript(text: str) -> list[list[str]]:
@@ -87,5 +106,6 @@ def preprocess_manuscript(text: str) -> list[list[str]]:
         >>> preprocess_manuscript(text)
         [['Para one.', 'Sentence two.'], ['Para two.']]
     """
+    validate_text_length(text)
     paragraphs = split_paragraphs(text)
     return [split_sentences(para) for para in paragraphs]

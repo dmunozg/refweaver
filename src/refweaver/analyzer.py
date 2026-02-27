@@ -15,7 +15,7 @@ from loguru import logger
 from refweaver.evaluation_models import SentenceEvaluation
 from refweaver.llm import LLMClient
 from refweaver.models import Article, Sentence
-from refweaver.text_utils import split_sentences
+from refweaver.text_utils import split_sentences, validate_text_length
 
 if TYPE_CHECKING:
     from refweaver.evaluation_models import FinalVerdict
@@ -46,6 +46,7 @@ class SentenceAnalyzer:
         Returns:
             List of Sentence objects with reference analysis.
         """
+        validate_text_length(paragraph)
         sentences = split_sentences(paragraph)
         results: list[Sentence] = []
 
@@ -91,6 +92,7 @@ class SentenceAnalyzer:
         """
         from refweaver.text_utils import split_paragraphs
 
+        validate_text_length(text)
         paragraphs = split_paragraphs(text)
         all_sentences: list[Sentence] = []
 
