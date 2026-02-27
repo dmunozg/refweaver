@@ -64,7 +64,7 @@ Relationships:
 ### GET /jobs/{job_id}
 
 - [x] Query RQ for job status.
-- [ ] When finished, include `run_id`, `run_url`, and optionally inline results.
+- [x] When finished, include `run_id`, `run_url`, and optionally inline results.
 
 ### POST /search
 
@@ -74,19 +74,19 @@ Relationships:
 
 ### POST /enrich
 
-- [ ] Request: list of articles to enrich.
-- [ ] Response: enriched articles list.
+- [x] Request: list of articles to enrich.
+- [x] Response: enriched articles list.
 
 ### POST /report
 
-- [ ] Request: run_id or raw evaluations + format.
-- [ ] Response: markdown or JSON report.
+- [x] Request: run_id or raw evaluations + format.
+- [x] Response: markdown or JSON report.
 - [ ] Alternative: replace with `/runs/{run_id}/report` to avoid duplication with `/runs/{run_id}`.
 
 ### GET /runs/{run_id}
 
-- [ ] Fetch persisted run + sentences + evaluations + verdicts.
-- [ ] Allow `format` query for `json|markdown` and include `report` if requested.
+- [x] Fetch persisted run + sentences + evaluations + verdicts.
+- [x] Allow `format` query for `json|markdown` and include `report` if requested.
 
 ## Phase 4: Async + Worker Integration
 
