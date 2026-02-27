@@ -19,6 +19,7 @@ class ApiSettings(BaseModel):
     rate_limit_per_minute: int = Field(
         default=int(os.getenv("REFWEAVER_RATE_LIMIT_PER_MINUTE", "0"))
     )
+    max_request_bytes: int = Field(default=int(os.getenv("REFWEAVER_MAX_REQUEST_BYTES", "5000000")))
     openalex_email: str | None = Field(default=os.getenv("OPENALEX_EMAIL"))
     semantic_scholar_api_key: str | None = Field(default=os.getenv("SEMANTIC_SCHOLAR_API_KEY"))
 

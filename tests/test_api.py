@@ -52,6 +52,16 @@ def test_analyze_sync_returns_results() -> None:
     assert data["results"] is not None
 
 
+def test_analyze_rejects_empty_text() -> None:
+    client = TestClient(app)
+    response = client.post(
+        "/analyze",
+        headers={"X-User-Id": "user-1"},
+        json={"text": "   "},
+    )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+
 def test_search_requires_user_header() -> None:
     client = TestClient(app)
     response = client.post("/search", json={"query": "test"})
@@ -80,6 +90,16 @@ def test_search_basic() -> None:
     assert "results" in payload
 
 
+def test_search_rejects_empty_query() -> None:
+    client = TestClient(app)
+    response = client.post(
+        "/search",
+        headers={"X-User-Id": "user-1"},
+        json={"query": "   "},
+    )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+
 def test_rate_limit_enforced() -> None:
     client = TestClient(app)
     with patch("refweaver.api.dependencies.SETTINGS") as settings:
@@ -91,3 +111,19 @@ def test_rate_limit_enforced() -> None:
         assert response.status_code == status.HTTP_200_OK
         response = client.get("/health", headers={"X-User-Id": "user-1"})
         assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+
+
+def test_request_size_limit_enforced() -> None:
+    client = TestClient(app)
+    with patch("refweaver.api.dependencies.SETTINGS") as settings:
+        settings.max_request_bytes = 10
+        settings.rate_limit_per_minute = 0
+        settings.api_key = None
+        settings.api_user_header = "X-User-Id"
+        settings.api_key_header = "X-API-Key"
+        response = client.post(
+            "/analyze",
+            headers={"X-User-Id": "user-1", "Content-Length": "999"},
+            json={"text": "This is a test sentence."},
+        )
+        assert response.status_code == status.HTTP_413_REQUEST_ENTITY_TOO_LARGE

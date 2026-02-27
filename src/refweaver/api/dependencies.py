@@ -4,7 +4,7 @@ import threading
 import time
 from collections import defaultdict, deque
 
-from fastapi import Depends, Header
+from fastapi import Depends, Header, Request
 
 from refweaver.api.errors import http_error
 from refweaver.api.settings import SETTINGS
@@ -51,3 +51,25 @@ def rate_limit_user(user_id: str = Depends(get_user_id)) -> None:
                 details={"limit_per_minute": str(limit)},
             )
         bucket.append(now)
+
+
+def enforce_request_size(request: Request) -> None:
+    """Reject requests exceeding the configured byte limit."""
+    content_length = request.headers.get("content-length")
+    if not content_length:
+        return
+    try:
+        size = int(content_length)
+    except ValueError as exc:
+        raise http_error(
+            "invalid_content_length",
+            "Invalid content-length header",
+            status_code=400,
+        ) from exc
+    if size > SETTINGS.max_request_bytes:
+        raise http_error(
+            "request_too_large",
+            "Request body exceeds size limit",
+            status_code=413,
+            details={"max_bytes": str(SETTINGS.max_request_bytes)},
+        )

@@ -6,7 +6,12 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends
 
-from refweaver.api.dependencies import get_user_id, rate_limit_user, verify_api_key
+from refweaver.api.dependencies import (
+    enforce_request_size,
+    get_user_id,
+    rate_limit_user,
+    verify_api_key,
+)
 from refweaver.api.errors import http_error
 from refweaver.api.schemas import AnalyzeRequest, AnalyzeResponse
 from refweaver.api.settings import SETTINGS
@@ -16,7 +21,7 @@ from refweaver.text_utils import validate_text_length
 
 router = APIRouter(
     tags=["analysis"],
-    dependencies=[Depends(verify_api_key), Depends(rate_limit_user)],
+    dependencies=[Depends(verify_api_key), Depends(rate_limit_user), Depends(enforce_request_size)],
 )
 
 

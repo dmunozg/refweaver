@@ -1,6 +1,6 @@
 """Request and response schemas for the API."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class AnalyzeRequest(BaseModel):
@@ -10,6 +10,26 @@ class AnalyzeRequest(BaseModel):
     mode: str = Field(default="paragraph", description="sentence|paragraph|document")
     async_mode: bool = Field(default=False, description="Run analysis asynchronously")
     include_markdown: bool = Field(default=True)
+
+    @field_validator("text")
+    @classmethod
+    def validate_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("text must be non-empty")
+        return value
+
+    @field_validator("mode")
+    @classmethod
+    def validate_mode(cls, value: str) -> str:
+        allowed = {"sentence", "paragraph", "document"}
+        if value not in allowed:
+            msg = f"mode must be one of {sorted(allowed)}"
+            raise ValueError(msg)
+        return value
+
+    @model_validator(mode="after")
+    def validate_async_mode(self) -> "AnalyzeRequest":
+        return self
 
 
 class AnalyzeResponse(BaseModel):
