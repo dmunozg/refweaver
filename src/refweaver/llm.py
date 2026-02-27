@@ -4,6 +4,7 @@ Supports OpenAI-compatible APIs (vLLM, OpenAI, etc.) with structured output
 via Pydantic models.
 """
 
+import asyncio
 import os
 from typing import Any
 
@@ -13,6 +14,9 @@ from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
+
+from refweaver.retry import retry_call
+from refweaver.timing import run_with_timeout
 
 
 class LLMConfig:
@@ -274,6 +278,8 @@ class LLMClient:
         self._model_name: str | None = None
         self._provider: OpenAIProvider | None = None
         self._model: OpenAIChatModel | None = None
+        self.request_timeout_seconds = float(os.getenv("LLM_TIMEOUT_SECONDS", "60"))
+        self.request_retries = int(os.getenv("LLM_RETRIES", "3"))
 
         logger.info(f"LLMClient initialized with base_url: {self.config.base_url}")
 
@@ -300,6 +306,27 @@ class LLMClient:
                 provider=self._get_provider(),
             )
         return self._model
+
+    def _run_agent_sync(self, agent: Agent, prompt: str) -> Any:
+        return retry_call(
+            lambda: run_with_timeout(agent.run_sync, self.request_timeout_seconds, prompt),
+            retries=self.request_retries,
+        )
+
+    async def _run_agent_async(self, agent: Agent, prompt: str) -> Any:
+        attempts = self.request_retries + 1
+        for attempt in range(1, attempts + 1):
+            try:
+                return await asyncio.wait_for(
+                    agent.run(prompt), timeout=self.request_timeout_seconds
+                )
+            except Exception as exc:
+                if attempt >= attempts:
+                    raise
+                logger.warning(
+                    f"Retrying agent run after error: {exc!r} "
+                    f"(attempt {attempt}/{self.request_retries})"
+                )
 
     def generate_search_keywords(
         self,
@@ -333,7 +360,7 @@ class LLMClient:
         prompt = f"Sentence: {sentence}{context_block}"
         try:
             logger.debug(f"Generating keywords for: {sentence[:60]}...")
-            response = agent.run_sync(prompt)
+            response = self._run_agent_sync(agent, prompt)
             keywords = response.output.keywords
             logger.info(f"Generated {len(keywords)} keywords: {keywords}")
             return keywords
@@ -363,7 +390,7 @@ class LLMClient:
         prompt = f"Sentence: {sentence}{context_block}"
         try:
             logger.debug(f"Generating keywords (async) for: {sentence[:60]}...")
-            response = await agent.run(prompt)
+            response = await self._run_agent_async(agent, prompt)
             keywords = response.output.keywords
             logger.info(f"Generated {len(keywords)} keywords: {keywords}")
             return keywords
@@ -415,7 +442,7 @@ Guidelines for sentences that DON'T need references:
 
         try:
             logger.debug(f"Analyzing sentence: {sentence[:80]}...")
-            response = agent.run_sync(prompt)
+            response = self._run_agent_sync(agent, prompt)
             result = response.output
             logger.debug(f"Analysis result: needs_reference={result.needs_reference}")
             return {
@@ -465,7 +492,7 @@ Guidelines for sentences that DON'T need references:
 
         try:
             logger.debug(f"Analyzing sentence (async): {sentence[:80]}...")
-            response = await agent.run(prompt)
+            response = await self._run_agent_async(agent, prompt)
             result = response.output
             return {
                 "needs_reference": result.needs_reference,
@@ -542,7 +569,7 @@ If the article suggests a modification to the original claim, provide the revise
 
         try:
             logger.debug(f"Evaluating article '{article_title[:50]}...' from abstract")
-            response = agent.run_sync(prompt)
+            response = self._run_agent_sync(agent, prompt)
             result = response.output
             logger.info(
                 f"Article evaluation: verdict={result.verdict}, confidence={result.confidence:.2f}"
@@ -611,7 +638,7 @@ If the article suggests a modification to the original claim, provide the revise
 
         try:
             logger.debug(f"Evaluating article (async) '{article_title[:50]}...' from abstract")
-            response = await agent.run(prompt)
+            response = await self._run_agent_async(agent, prompt)
             result = response.output
             return {
                 "verdict": result.verdict,
@@ -696,7 +723,7 @@ If the article suggests a modification to the original claim, provide the revise
 
         try:
             logger.debug(f"Evaluating full text of '{article_title[:50]}...'")
-            response = agent.run_sync(prompt)
+            response = self._run_agent_sync(agent, prompt)
             result = response.output
             logger.info(
                 f"Full-text evaluation: verdict={result.verdict}, "
@@ -770,7 +797,7 @@ If the article suggests a modification, provide revised wording."""
 
         try:
             logger.debug(f"Evaluating full text (async) of '{article_title[:50]}...'")
-            response = await agent.run(prompt)
+            response = await self._run_agent_async(agent, prompt)
             result = response.output
             return {
                 "verdict": result.verdict,
@@ -822,7 +849,7 @@ If no abstract is found, set found=false."""
 
         try:
             logger.debug(f"Sending abstract extraction request for: {article_title[:50]}...")
-            response = agent.run_sync(prompt)
+            response = self._run_agent_sync(agent, prompt)
             result = response.output
 
             if result.found and result.abstract:
@@ -868,7 +895,7 @@ If no abstract is found, set found=false."""
             logger.debug(
                 f"Sending abstract extraction request (async) for: {article_title[:50]}..."
             )
-            response = await agent.run(prompt)
+            response = await self._run_agent_async(agent, prompt)
             result = response.output
 
             if result.found and result.abstract:
@@ -936,7 +963,7 @@ If abstract or DOI is not found, set the corresponding found flag to false."""
 
         try:
             logger.debug(f"Sending metadata extraction request for: {article_title[:50]}...")
-            response = agent.run_sync(prompt)
+            response = self._run_agent_sync(agent, prompt)
             result = response.output
 
             # Determine abstract: use explicit abstract or generated summary
@@ -1101,7 +1128,7 @@ Provide your score and brief reasoning."""
 
         try:
             logger.debug(f"Scoring relevance for: {article_title[:50]}...")
-            response = agent.run_sync(prompt)
+            response = self._run_agent_sync(agent, prompt)
             result = response.output
 
             logger.debug(f"Relevance score: {result.score:.2f} - {article_title[:50]}...")

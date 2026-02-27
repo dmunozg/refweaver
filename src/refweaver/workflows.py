@@ -8,6 +8,7 @@ from refweaver.adapters.perplexity import PerplexityAdapter
 from refweaver.analyzer import SentenceAnalyzer
 from refweaver.dedup import deduplicate_articles
 from refweaver.enrich import ArticleEnricher
+from refweaver.evaluation_models import FinalVerdict, SentenceEvaluation
 from refweaver.models import Sentence
 from refweaver.search import UnifiedSearch
 
@@ -23,7 +24,7 @@ def analyze_paragraph_with_evidence(
     limit_per_source: int = 5,
     relevance_threshold: float = 0.5,
     max_articles_for_stance: int = 10,
-) -> list[tuple[Sentence, object, list[object]]]:
+) -> list[tuple[Sentence, FinalVerdict, list[SentenceEvaluation]]]:
     """Analyze a paragraph and return sentence verdicts with evaluations.
 
     Args:
@@ -46,7 +47,7 @@ def analyze_paragraph_with_evidence(
     enricher = enricher or ArticleEnricher()
 
     sentences = analyzer.analyze_paragraph(paragraph)
-    results: list[tuple[Sentence, object, list[object]]] = []
+    results: list[tuple[Sentence, FinalVerdict, list[SentenceEvaluation]]] = []
 
     for sentence in sentences:
         if not sentence.needs_reference:
