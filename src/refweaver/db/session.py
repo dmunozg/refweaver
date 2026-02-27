@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from sqlalchemy import Engine, create_engine
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 
 def get_engine(database_url: str) -> Engine:
@@ -14,4 +14,5 @@ def get_engine(database_url: str) -> Engine:
 def get_session(database_url: str) -> Session:
     """Create a session bound to the given database URL."""
     engine = get_engine(database_url)
-    return Session(engine)
+    maker = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+    return maker()
