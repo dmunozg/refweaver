@@ -39,7 +39,12 @@ def test_analyze_sync_returns_results() -> None:
         "include_markdown": False,
     }
     with patch("refweaver.api.routes.analyze.analyze_paragraph_job") as job:
-        job.return_value = {"results": [], "markdown_report": None}
+        job.return_value = {
+            "run_id": "run",
+            "user_id": "user-1",
+            "results": [],
+            "markdown_report": None,
+        }
         response = client.post("/analyze", headers={"X-User-Id": "user-1"}, json=payload)
     assert response.status_code == status.HTTP_200_OK
     data = response.json()

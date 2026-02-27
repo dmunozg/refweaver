@@ -32,6 +32,8 @@ def analyze_text(
         job_id = enqueue_job(
             "refweaver.jobs.analyze_paragraph_job",
             payload.text,
+            run_id=run_id,
+            user_id=user_id,
             include_markdown=payload.include_markdown,
         )
         return AnalyzeResponse(
@@ -41,7 +43,12 @@ def analyze_text(
             job_url=f"/jobs/{job_id}",
         )
 
-    result = analyze_paragraph_job(payload.text, include_markdown=payload.include_markdown)
+    result = analyze_paragraph_job(
+        payload.text,
+        run_id=run_id,
+        user_id=user_id,
+        include_markdown=payload.include_markdown,
+    )
     return AnalyzeResponse(
         run_id=run_id,
         status="completed",

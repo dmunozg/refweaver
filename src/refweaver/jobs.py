@@ -12,12 +12,16 @@ from refweaver.workflows import analyze_paragraph_with_evidence
 def analyze_paragraph_job(
     paragraph: str,
     *,
+    run_id: str,
+    user_id: str,
     include_markdown: bool = True,
 ) -> dict[str, Any]:
     """Analyze a paragraph and return JSON-serializable results.
 
     Args:
         paragraph: Paragraph text to analyze.
+        run_id: Identifier for the analysis run.
+        user_id: Identifier for the requesting user.
         include_markdown: Whether to include a Markdown report in the response.
 
     Returns:
@@ -44,7 +48,11 @@ def analyze_paragraph_job(
             }
         )
 
-    response: dict[str, Any] = {"results": serialized_results}
+    response: dict[str, Any] = {
+        "run_id": run_id,
+        "user_id": user_id,
+        "results": serialized_results,
+    }
 
     if include_markdown:
         response["markdown_report"] = sentence_evaluations_to_markdown(results)
