@@ -4,15 +4,11 @@ Provides functions for splitting manuscripts into paragraphs and sentences,
 as well as other text preprocessing utilities.
 """
 
+import importlib.util
 import math
 import re
 
-try:
-    import nltk
-
-    NLTK_AVAILABLE = True
-except ImportError:
-    NLTK_AVAILABLE = False
+NLTK_AVAILABLE = importlib.util.find_spec("nltk") is not None
 
 
 def split_paragraphs(text: str) -> list[str]:
