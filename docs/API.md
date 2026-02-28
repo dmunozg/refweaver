@@ -164,7 +164,7 @@ Enrich a list of articles (e.g., fill missing abstracts).
 
 Request body:
 
-- `articles` (list of Article objects, required)
+- `articles` (list of objects with `source`, `external_id`, `title`, `authors`, `year`, optional `doi`, `url`)
 - `try_llm` (boolean, optional, default false)
 
 Example:
