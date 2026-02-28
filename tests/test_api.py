@@ -127,7 +127,7 @@ def test_rate_limit_enforced() -> None:
 
 def test_request_size_limit_enforced() -> None:
     client = TestClient(app)
-    with patch("refweaver.api.dependencies.SETTINGS") as settings:
+    with patch("refweaver.api.middleware.SETTINGS") as settings:
         settings.max_request_bytes = 10
         settings.rate_limit_per_minute = 0
         settings.api_key = None
@@ -136,6 +136,22 @@ def test_request_size_limit_enforced() -> None:
         response = client.post(
             "/analyze",
             headers={"X-User-Id": "user-1", "Content-Length": "999"},
+            json={"text": "This is a test sentence."},
+        )
+        assert response.status_code == status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
+
+
+def test_request_size_limit_enforced_without_length() -> None:
+    client = TestClient(app)
+    with patch("refweaver.api.middleware.SETTINGS") as settings:
+        settings.max_request_bytes = 10
+        settings.rate_limit_per_minute = 0
+        settings.api_key = None
+        settings.api_user_header = "X-User-Id"
+        settings.api_key_header = "X-API-Key"
+        response = client.post(
+            "/analyze",
+            headers={"X-User-Id": "user-1"},
             json={"text": "This is a test sentence."},
         )
         assert response.status_code == status.HTTP_413_REQUEST_ENTITY_TOO_LARGE

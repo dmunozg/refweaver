@@ -3,19 +3,14 @@
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field, field_validator
 
-from refweaver.api.dependencies import (
-    enforce_request_size,
-    get_user_id,
-    rate_limit_user,
-    verify_api_key,
-)
+from refweaver.api.dependencies import get_user_id, rate_limit_user, verify_api_key
 from refweaver.api.settings import SETTINGS
 from refweaver.enrich import ArticleEnricher
 from refweaver.models import Article
 
 router = APIRouter(
     tags=["enrich"],
-    dependencies=[Depends(verify_api_key), Depends(rate_limit_user), Depends(enforce_request_size)],
+    dependencies=[Depends(verify_api_key), Depends(rate_limit_user)],
 )
 
 

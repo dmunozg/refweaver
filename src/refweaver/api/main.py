@@ -2,6 +2,7 @@
 
 from fastapi import FastAPI
 
+from refweaver.api.middleware import RequestSizeLimitMiddleware
 from refweaver.api.routes.analyze import router as analyze_router
 from refweaver.api.routes.enrich import router as enrich_router
 from refweaver.api.routes.health import router as health_router
@@ -15,6 +16,7 @@ from refweaver.api.settings import SETTINGS
 def create_app() -> FastAPI:
     """Create the FastAPI application."""
     app = FastAPI(title=SETTINGS.api_title, version=SETTINGS.api_version)
+    app.add_middleware(RequestSizeLimitMiddleware)
     app.include_router(health_router)
     app.include_router(analyze_router)
     app.include_router(enrich_router)
