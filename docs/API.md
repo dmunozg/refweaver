@@ -11,6 +11,14 @@ Use the base URL where your FastAPI app is running, for example:
 
 - `http://localhost:8000`
 
+## Running the API
+
+For local development, run the FastAPI app with Uvicorn:
+
+```bash
+uvicorn refweaver.api.main:app --reload
+```
+
 ## Authentication and Headers
 
 Required headers:
