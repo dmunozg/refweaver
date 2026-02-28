@@ -45,8 +45,8 @@ Relationships:
 
 ### Migrations
 
-- [ ] Use Alembic for migrations.
-- [ ] Add initial migration with above tables and indexes (run_id, sentence_id, article_id).
+- [x] Use Alembic for migrations.
+- [x] Add initial migration with above tables and indexes (run_id, sentence_id, article_id).
 
 ## Phase 3: Core Endpoints
 
