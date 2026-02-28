@@ -7,7 +7,7 @@ from typing import Any
 
 from loguru import logger
 
-from refweaver.db.persist import persist_run_results
+from refweaver.db.persist import create_queued_run, persist_run_results
 from refweaver.db.session import get_session
 from refweaver.formatting import sentence_evaluations_to_markdown
 from refweaver.models import Sentence
@@ -35,6 +35,13 @@ def analyze_paragraph_job(
     results = analyze_paragraph_with_evidence(paragraph)
     try:
         session = get_session(os.getenv("DATABASE_URL", "sqlite:///./refweaver.db"))
+        create_queued_run(
+            session,
+            run_id=run_id,
+            user_id=user_id,
+            mode="paragraph",
+            input_text=paragraph,
+        )
         persist_run_results(
             session,
             run_id=run_id,

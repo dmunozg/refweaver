@@ -17,7 +17,7 @@ from refweaver.db.models import (
     User,
     VerdictRecord,
 )
-from refweaver.db.persist import persist_run_results
+from refweaver.db.persist import create_queued_run, persist_run_results
 from refweaver.evaluation_models import FinalVerdict, SentenceEvaluation, SourceIdentifier
 from pydantic import HttpUrl
 
@@ -167,5 +167,27 @@ def test_persist_run_results_creates_records() -> None:
     assert session.query(ArticleRecord).filter_by(external_id="oa-1").count() == 1
     assert session.query(EvaluationRecord).count() == 1
     assert session.query(VerdictRecord).count() == 1
+    session.close()
+    engine.dispose()
+
+
+def test_create_queued_run_idempotent() -> None:
+    session, engine = _make_session()
+    run = create_queued_run(
+        session,
+        run_id="run-queued",
+        user_id="user-queued",
+        mode="paragraph",
+        input_text="Example",
+    )
+    assert run.status == "queued"
+    run2 = create_queued_run(
+        session,
+        run_id="run-queued",
+        user_id="user-queued",
+        mode="paragraph",
+        input_text="Example",
+    )
+    assert run2.id == run.id
     session.close()
     engine.dispose()

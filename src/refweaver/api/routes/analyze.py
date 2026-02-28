@@ -10,6 +10,8 @@ from refweaver.api.dependencies import get_user_id, rate_limit_user, verify_api_
 from refweaver.api.errors import http_error
 from refweaver.api.schemas import AnalyzeRequest, AnalyzeResponse
 from refweaver.api.settings import SETTINGS
+from refweaver.db.persist import create_queued_run
+from refweaver.db.session import get_session
 from refweaver.jobs import analyze_paragraph_job
 from refweaver.queue import enqueue_job
 from refweaver.text_utils import validate_text_length
@@ -32,6 +34,14 @@ def analyze_text(
 
     run_id = uuid4().hex
     if payload.async_mode or len(payload.text) > SETTINGS.run_async_threshold:
+        session = get_session(SETTINGS.database_url)
+        create_queued_run(
+            session,
+            run_id=run_id,
+            user_id=user_id,
+            mode=payload.mode,
+            input_text=payload.text,
+        )
         job_id = enqueue_job(
             "refweaver.jobs.analyze_paragraph_job",
             payload.text,
