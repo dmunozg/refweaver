@@ -7,7 +7,7 @@ from refweaver.api.dependencies import get_user_id, rate_limit_user, verify_api_
 from refweaver.api.errors import http_error
 from refweaver.api.reporting import build_run_report
 from refweaver.api.settings import SETTINGS
-from refweaver.db.models import Run, SentenceRecord, VerdictRecord
+from refweaver.db.models import ArticleRecord, EvaluationRecord, Run, SentenceRecord, VerdictRecord
 from refweaver.db.session import get_session
 
 router = APIRouter(
@@ -47,6 +47,16 @@ def generate_report(
             VerdictRecord.sentence_id.in_([s.id for s in sentences])
         )
     }
+    evaluations = (
+        session.query(EvaluationRecord)
+        .filter(EvaluationRecord.sentence_id.in_([s.id for s in sentences]))
+        .all()
+    )
+    article_ids = {evaluation.article_id for evaluation in evaluations}
+    articles = {
+        article.id: article
+        for article in session.query(ArticleRecord).filter(ArticleRecord.id.in_(article_ids))
+    }
     if payload.format == "json":
         sentence_payloads = []
         for sentence in sentences:
@@ -60,5 +70,11 @@ def generate_report(
             )
         return {"run_id": payload.run_id, "sentences": sentence_payloads}
 
-    report = build_run_report(payload.run_id, sentences, verdicts)
+    report = build_run_report(
+        payload.run_id,
+        sentences,
+        verdicts,
+        evaluations,
+        articles,
+    )
     return {"run_id": payload.run_id, "report": report}
