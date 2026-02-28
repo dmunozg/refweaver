@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from refweaver.api.dependencies import get_user_id, rate_limit_user, verify_api_key
 from refweaver.api.errors import http_error
+from refweaver.api.reporting import build_run_report
 from refweaver.api.settings import SETTINGS
 from refweaver.db.models import Run, SentenceRecord, VerdictRecord
 from refweaver.db.session import get_session
@@ -59,10 +60,5 @@ def generate_report(
             )
         return {"run_id": payload.run_id, "sentences": sentence_payloads}
 
-    report_lines = [f"# Run {run.id}"]
-    for sentence in sentences:
-        verdict = verdicts.get(sentence.id)
-        report_lines.append(f"- {sentence.text}")
-        if verdict:
-            report_lines.append(f"  - Verdict: {verdict.overall_assessment}")
-    return {"run_id": payload.run_id, "report": "\n".join(report_lines)}
+    report = build_run_report(payload.run_id, sentences, verdicts)
+    return {"run_id": payload.run_id, "report": report}

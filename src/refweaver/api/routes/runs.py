@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query
 
 from refweaver.api.dependencies import get_user_id, rate_limit_user, verify_api_key
 from refweaver.api.errors import http_error
+from refweaver.api.reporting import build_run_report
 from refweaver.api.settings import SETTINGS
 from refweaver.db.models import EvaluationRecord, Run, SentenceRecord, VerdictRecord
 from refweaver.db.session import get_session
@@ -90,11 +91,5 @@ def get_run(
         ],
     }
     if format == "markdown":
-        report_lines = [f"# Run {run.id}"]
-        for sentence in sentences:
-            verdict = verdicts.get(sentence.id)
-            report_lines.append(f"- {sentence.text}")
-            if verdict:
-                report_lines.append(f"  - Verdict: {verdict.overall_assessment}")
-        payload["report"] = "\n".join(report_lines)
+        payload["report"] = build_run_report(run.id, sentences, verdicts)
     return payload
