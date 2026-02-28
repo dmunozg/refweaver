@@ -1,116 +1,258 @@
-# REST API Implementation Plan
+# RefWeaver REST API
 
-Date: 2026-02-27
+This document explains how to use the RefWeaver REST API and provides curl
+examples for each endpoint. The API is internal-only and requires a user ID
+header on all requests. If an API key is configured, it must be provided on
+every request as well.
 
-## Goals
+## Base URL
 
-- [x] Provide a FastAPI-based REST API for analysis, search, enrichment, and reporting.
-- [x] Add persistence with a database and ORM to store results for later retrieval.
-- [x] Support sync and async workflows using the existing Redis/RQ job system.
-- [x] Keep endpoints aligned with the proposed API in `docs/TODO.md`.
-- [x] Keep the API internal-only but still associate each job/run with a user ID.
+Use the base URL where your FastAPI app is running, for example:
 
-## Phase 1: API Skeleton
+- `http://localhost:8000`
 
-- [x] Create `src/refweaver/api/` package with:
-  - [x] `main.py` FastAPI app entrypoint.
-  - [x] `routes/` module for endpoint routers.
-  - [x] `schemas.py` for request/response models.
-  - [x] `settings.py` using Pydantic settings to read env vars.
-  - [x] `errors.py` for consistent error responses.
-- [x] Add OpenAPI tags and endpoint descriptions.
+## Authentication and Headers
 
-## Phase 2: Database + ORM
+Required headers:
 
-### Technology choice
+- `X-User-Id`: The user identifier used to associate runs and jobs.
 
-- [x] Use SQLAlchemy 2.0 + Pydantic models.
-- [x] Default DB: SQLite for dev, PostgreSQL for prod.
+Optional (if configured):
 
-### Data models
+- `X-API-Key`: Required when `REFWEAVER_API_KEY` is set.
 
-- [x] `User`: minimal record with a user_id and timestamps.
-- [x] `Run`: analysis session metadata (input text, mode, status, timestamps, config).
-- [x] `SentenceRecord`: derived sentences per run (original, rewritten, needs_reference, reason).
-- [x] `ArticleRecord`: articles used in evaluations.
-- [x] `EvaluationRecord`: per-sentence evaluations (relevance, stance, evidence, article link).
-- [x] `VerdictRecord`: per-sentence final verdict (confidence, synthesis, sources).
+## Common Errors
 
-Relationships:
-- [x] `Run.user_id` -> `User.id` (required)
-- [x] `SentenceRecord.run_id` -> `Run.id`
-- [x] `EvaluationRecord.sentence_id` -> `SentenceRecord.id`
-- [x] `EvaluationRecord.article_id` -> `ArticleRecord.id`
-- [x] `VerdictRecord.sentence_id` -> `SentenceRecord.id`
+- `400`: Missing user header or invalid request headers.
+- `401`: Invalid API key.
+- `404`: Resource not found.
+- `413`: Request body too large.
+- `422`: Validation error for request payloads.
+- `429`: Rate limit exceeded.
 
-### Migrations
+## GET /health
 
-- [x] Use Alembic for migrations.
-- [x] Add initial migration with above tables and indexes (run_id, sentence_id, article_id).
+Health check endpoint.
 
-## Phase 3: Core Endpoints
+Example:
 
-### POST /analyze
+```bash
+curl -s \
+  -H "X-User-Id: user-1" \
+  http://localhost:8000/health
+```
 
-- [x] Request: `text`, `mode` (sentence|paragraph|document), `async`, options.
-- [x] Behavior:
-  - [x] If `async=true`, enqueue job and return `202` with job ID.
-  - [x] If sync, run pipeline and persist results in DB.
-  - [x] If input exceeds token limits, return `413` with a structured error.
-- [x] Response:
-  - [x] Sync: results + `run_id` + optional markdown.
-  - [x] Async: job metadata + `run_id` + status URL.
+Response:
 
-### GET /jobs/{job_id}
+```json
+{"status": "ok"}
+```
 
-- [x] Query RQ for job status.
-- [x] When finished, include `run_id`, `run_url`, and optionally inline results.
+## POST /analyze
 
-### POST /search
+Analyze a sentence/paragraph/document and return results.
 
-- [x] Request: keywords/query, sources, limits, `enrich` (boolean, default false).
-- [x] Response: list of `Article` models (enriched only when `enrich=true`).
-- [ ] Optionally store searches for analytics.
+Request body:
 
-### POST /enrich
+- `text` (string, required): Input text to analyze.
+- `mode` (string, optional): `sentence`, `paragraph`, or `document`. Default: `paragraph`.
+- `async_mode` (boolean, optional): If true, enqueue a background job. Default: false.
+- `include_markdown` (boolean, optional): Include a markdown report. Default: true.
 
-- [x] Request: list of articles to enrich.
-- [x] Response: enriched articles list.
+Example (sync):
 
-### POST /report
+```bash
+curl -s \
+  -H "X-User-Id: user-1" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"This is a test sentence.","mode":"paragraph","include_markdown":false}' \
+  http://localhost:8000/analyze
+```
 
-- [x] Request: run_id or raw evaluations + format.
-- [x] Response: markdown or JSON report.
-- [ ] Alternative: replace with `/runs/{run_id}/report` to avoid duplication with `/runs/{run_id}`.
+Example (async):
 
-### GET /runs/{run_id}
+```bash
+curl -s \
+  -H "X-User-Id: user-1" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"This is a test sentence.","async_mode":true}' \
+  http://localhost:8000/analyze
+```
 
-- [x] Fetch persisted run + sentences + evaluations + verdicts.
-- [x] Allow `format` query for `json|markdown` and include `report` if requested.
+Response (sync):
 
-## Phase 4: Async + Worker Integration
+```json
+{
+  "run_id": "<run-id>",
+  "status": "completed",
+  "results": [
+    {
+      "sentence": {"text": "..."},
+      "sentence_for_evaluation": "...",
+      "sentence_original_text": "...",
+      "verdict": {"overall_assessment": "..."},
+      "evaluations": []
+    }
+  ],
+  "markdown_report": null
+}
+```
 
-- [x] Update job payload to store `run_id` and persist results on completion.
-- [x] Add `refweaver-worker` to write results into DB.
+Response (async):
 
-## Phase 5: Auth, Rate Limiting, Validation
+```json
+{
+  "run_id": "<run-id>",
+  "status": "queued",
+  "job_id": "<job-id>",
+  "job_url": "/jobs/<job-id>"
+}
+```
 
-- [x] API key header (env var controlled) and user ID header to associate runs/jobs.
-- [x] Add request size limits and rate limiting hooks.
-- [x] Standardize error responses.
-- [x] Validate all inputs (size, token estimate, allowed enums, and required fields).
+## GET /jobs/{job_id}
 
-## Phase 6: Tests & Documentation
+Check the status of an async job.
 
-- [x] API tests with FastAPI TestClient.
-- [ ] DB tests with SQLite in-memory.
-- [ ] Docs: usage examples and curl snippets in `docs/API.md`.
+Example:
 
-## Configuration
+```bash
+curl -s \
+  -H "X-User-Id: user-1" \
+  http://localhost:8000/jobs/<job-id>
+```
 
-- [x] `DATABASE_URL` (default SQLite)
-- [x] `REDIS_URL`
-- [x] `API_KEY` (optional)
-- [x] `API_USER_HEADER` (e.g., `X-User-Id`)
-- [x] `RUN_ASYNC_THRESHOLD` (length)
-- [x] `MAX_INPUT_TOKENS` (default 64000)
+Response (finished):
+
+```json
+{
+  "status": "finished",
+  "job_id": "<job-id>",
+  "run_id": "<run-id>",
+  "run_url": "/runs/<run-id>",
+  "result": {"run_id": "<run-id>", "results": []}
+}
+```
+
+## POST /search
+
+Search for articles. Enrichment is optional and off by default.
+
+Request body:
+
+- `query` (string, required)
+- `limit_per_source` (int, optional, default 5)
+- `enrich` (boolean, optional, default false)
+
+Example:
+
+```bash
+curl -s \
+  -H "X-User-Id: user-1" \
+  -H "Content-Type: application/json" \
+  -d '{"query":"climate change", "limit_per_source": 3, "enrich": false}' \
+  http://localhost:8000/search
+```
+
+Response:
+
+```json
+{"results": [{"source": "openalex", "external_id": "..."}]}
+```
+
+## POST /enrich
+
+Enrich a list of articles (e.g., fill missing abstracts).
+
+Request body:
+
+- `articles` (list of Article objects, required)
+- `try_llm` (boolean, optional, default false)
+
+Example:
+
+```bash
+curl -s \
+  -H "X-User-Id: user-1" \
+  -H "Content-Type: application/json" \
+  -d '{"articles":[{"source":"openalex","external_id":"oa-1","title":"Example","authors":["Author"],"year":2023}],"try_llm":false}' \
+  http://localhost:8000/enrich
+```
+
+Response:
+
+```json
+{"results": [{"source": "openalex", "external_id": "oa-1", "abstract": "..."}]}
+```
+
+## POST /report
+
+Generate a report for a stored run.
+
+Request body:
+
+- `run_id` (string, required)
+- `format` (string, optional): `markdown` or `json`.
+
+Example:
+
+```bash
+curl -s \
+  -H "X-User-Id: user-1" \
+  -H "Content-Type: application/json" \
+  -d '{"run_id":"<run-id>","format":"markdown"}' \
+  http://localhost:8000/report
+```
+
+Response:
+
+```json
+{"run_id": "<run-id>", "report": "# Run ...\n- Sentence ..."}
+```
+
+## GET /runs/{run_id}
+
+Retrieve a stored run and its sentences, verdicts, and evaluations.
+
+Query params:
+
+- `format` (optional): `json` or `markdown`.
+
+Example:
+
+```bash
+curl -s \
+  -H "X-User-Id: user-1" \
+  "http://localhost:8000/runs/<run-id>?format=markdown"
+```
+
+Response (json):
+
+```json
+{
+  "run": {"id": "<run-id>", "user_id": "user-1"},
+  "sentences": [],
+  "verdicts": {},
+  "evaluations": []
+}
+```
+
+Response (markdown):
+
+```json
+{
+  "run": {"id": "<run-id>", "user_id": "user-1"},
+  "sentences": [],
+  "verdicts": {},
+  "evaluations": [],
+  "report": "# Run <run-id>\n- ..."
+}
+```
+
+## Configuration Reference
+
+- `DATABASE_URL`: DB connection string.
+- `REFWEAVER_API_KEY`: API key (optional).
+- `REFWEAVER_RATE_LIMIT_PER_MINUTE`: Requests per minute per user (0 disables).
+- `REFWEAVER_MAX_REQUEST_BYTES`: Max request size in bytes.
+- `OPENALEX_EMAIL`: Optional for OpenAlex.
+- `SEMANTIC_SCHOLAR_API_KEY`: Optional for enrichment.
