@@ -128,8 +128,7 @@ Response (finished):
   "status": "finished",
   "job_id": "<job-id>",
   "run_id": "<run-id>",
-  "run_url": "/runs/<run-id>",
-  "result": {"run_id": "<run-id>", "results": []}
+  "run_url": "/runs/<run-id>"
 }
 ```
 

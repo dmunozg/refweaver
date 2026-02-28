@@ -38,7 +38,9 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = os.getenv("DATABASE_URL", config.get_main_option("sqlalchemy.url"))
+    url = os.getenv("DATABASE_URL")
+    if not url:
+        raise RuntimeError("DATABASE_URL must be set to run migrations")
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -58,8 +60,10 @@ def run_migrations_online() -> None:
 
     """
     configuration = config.get_section(config.config_ini_section, {})
-    fallback_url = configuration.get("sqlalchemy.url") or "sqlite:///./refweaver.db"
-    configuration["sqlalchemy.url"] = os.getenv("DATABASE_URL", fallback_url)
+    database_url = os.getenv("DATABASE_URL")
+    if not database_url:
+        raise RuntimeError("DATABASE_URL must be set to run migrations")
+    configuration["sqlalchemy.url"] = database_url
     connectable = engine_from_config(
         configuration,
         prefix="sqlalchemy.",

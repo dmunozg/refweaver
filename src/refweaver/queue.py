@@ -47,10 +47,8 @@ def fetch_job(job_id: str) -> dict[str, Any]:
 
     if status == "failed":
         payload["error"] = str(job.exc_info)
-    elif status == "finished":
-        payload["result"] = job.result
-        if isinstance(job.result, dict) and "run_id" in job.result:
-            payload["run_id"] = job.result.get("run_id")
-            payload["run_url"] = f"/runs/{job.result.get('run_id')}"
+    elif status == "finished" and isinstance(job.result, dict) and "run_id" in job.result:
+        payload["run_id"] = job.result.get("run_id")
+        payload["run_url"] = f"/runs/{job.result.get('run_id')}"
 
     return payload
