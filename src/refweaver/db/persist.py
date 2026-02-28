@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from sqlalchemy.orm import Session
@@ -63,6 +63,7 @@ def persist_run_results(
 ) -> Run:
     """Persist run results and return the Run record."""
     _get_or_create_user(session, user_id)
+    now = datetime.now(UTC)
     run = Run(
         id=run_id,
         user_id=user_id,
@@ -70,8 +71,8 @@ def persist_run_results(
         status="completed",
         input_text=input_text,
         config={},
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=now,
+        updated_at=now,
     )
     session.add(run)
 
