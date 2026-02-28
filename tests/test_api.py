@@ -116,6 +116,7 @@ def test_rate_limit_enforced() -> None:
     client = TestClient(app)
     with patch("refweaver.api.dependencies.SETTINGS") as settings:
         settings.rate_limit_per_minute = 1
+        settings.rate_limit_backend = "memory"
         settings.api_key = None
         settings.api_user_header = "X-User-Id"
         settings.api_key_header = "X-API-Key"
@@ -123,6 +124,24 @@ def test_rate_limit_enforced() -> None:
         assert response.status_code == status.HTTP_200_OK
         response = client.get("/health", headers={"X-User-Id": "user-1"})
         assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+
+
+def test_rate_limit_redis_backend() -> None:
+    client = TestClient(app)
+    with patch("refweaver.api.dependencies.SETTINGS") as settings:
+        settings.rate_limit_per_minute = 1
+        settings.rate_limit_backend = "redis"
+        settings.api_key = None
+        settings.api_user_header = "X-User-Id"
+        settings.api_key_header = "X-API-Key"
+        with patch("refweaver.queue.get_redis_connection") as get_redis:
+            redis = MagicMock()
+            redis.incr.side_effect = [1, 2]
+            get_redis.return_value = redis
+            response = client.get("/health", headers={"X-User-Id": "user-1"})
+            assert response.status_code == status.HTTP_200_OK
+            response = client.get("/health", headers={"X-User-Id": "user-1"})
+            assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
 
 
 def test_request_size_limit_enforced() -> None:

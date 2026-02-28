@@ -37,6 +37,23 @@ def rate_limit_user(user_id: str = Depends(get_user_id)) -> None:
     if limit <= 0:
         return
 
+    if SETTINGS.rate_limit_backend == "redis":
+        from refweaver.queue import get_redis_connection
+
+        redis = get_redis_connection()
+        key = f"refweaver:rate:{user_id}"
+        count = redis.incr(key)
+        if count == 1:
+            redis.expire(key, 60)
+        if count > limit:
+            raise http_error(
+                "rate_limited",
+                "Rate limit exceeded",
+                status_code=429,
+                details={"limit_per_minute": str(limit)},
+            )
+        return
+
     now = time.monotonic()
     cutoff = now - 60.0
     with _RATE_LIMIT_LOCK:

@@ -252,6 +252,7 @@ Response (markdown):
 - `DATABASE_URL`: DB connection string.
 - `REFWEAVER_API_KEY`: API key (optional).
 - `REFWEAVER_RATE_LIMIT_PER_MINUTE`: Requests per minute per user (0 disables).
+- `REFWEAVER_RATE_LIMIT_BACKEND`: `memory` or `redis`.
 - `REFWEAVER_MAX_REQUEST_BYTES`: Max request size in bytes.
 - `OPENALEX_EMAIL`: Optional for OpenAlex.
 - `SEMANTIC_SCHOLAR_API_KEY`: Optional for enrichment.
