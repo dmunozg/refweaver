@@ -62,7 +62,7 @@ def articles_to_table(
 
     # Try tabulate for nice formatting
     try:
-        from tabulate import tabulate  # type: ignore[import-untyped]
+        from tabulate import tabulate
 
         headers = [col.replace("_", " ").title() for col in columns]
         table_data = [[row.get(col, "-") for col in columns] for row in rows]

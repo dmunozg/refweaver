@@ -1,5 +1,6 @@
 """FastAPI application entrypoint."""
 
+import uvicorn
 from fastapi import FastAPI
 
 from refweaver.api.middleware import RequestSizeLimitMiddleware
@@ -28,3 +29,15 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+
+
+def main(host: str = "0.0.0.0", port: int = 8000, reload: bool = False) -> None:
+    """Run the FastAPI app with Uvicorn.
+
+    This is the console-script entrypoint referenced in `pyproject.toml`.
+    """
+    uvicorn.run(app, host=host, port=port, reload=reload)
+
+
+if __name__ == "__main__":
+    main()
