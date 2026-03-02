@@ -66,6 +66,15 @@ def test_analyze_rejects_empty_text(client: TestClient) -> None:
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
 
+def test_analyze_rejects_mode_field(client: TestClient) -> None:
+    response = client.post(
+        "/analyze",
+        headers={"X-User-Id": "user-1"},
+        json={"text": "This is a test sentence.", "mode": "paragraph"},
+    )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+
 def test_search_requires_user_header(client: TestClient) -> None:
     response = client.post("/search", json={"query": "test"})
     assert response.status_code == status.HTTP_400_BAD_REQUEST
