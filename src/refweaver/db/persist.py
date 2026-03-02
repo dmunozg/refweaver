@@ -33,7 +33,7 @@ def create_queued_run(
     *,
     run_id: str,
     user_id: str,
-    mode: str,
+    mode: str = "paragraph",
     input_text: str,
 ) -> Run:
     """Create a queued run entry if it does not already exist."""

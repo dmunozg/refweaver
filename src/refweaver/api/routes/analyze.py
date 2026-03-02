@@ -9,7 +9,6 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from refweaver.api.dependencies import get_db_session, get_user_id, rate_limit_user, verify_api_key
-from refweaver.api.errors import http_error
 from refweaver.api.schemas import AnalyzeRequest, AnalyzeResponse
 from refweaver.api.settings import SETTINGS
 from refweaver.db.persist import create_queued_run
@@ -29,9 +28,6 @@ def analyze_text(
     session: Annotated[Session, Depends(get_db_session)],
     user_id: str = Depends(get_user_id),
 ) -> AnalyzeResponse:
-    if payload.mode not in {"sentence", "paragraph", "document"}:
-        raise http_error("invalid_mode", "mode must be sentence|paragraph|document")
-
     validate_text_length(payload.text, max_tokens=SETTINGS.max_input_tokens)
 
     run_id = uuid4().hex
@@ -40,7 +36,6 @@ def analyze_text(
             session,
             run_id=run_id,
             user_id=user_id,
-            mode=payload.mode,
             input_text=payload.text,
         )
         job_id = enqueue_job(
