@@ -84,7 +84,7 @@ class ArticleRecord(Base):
 
     __tablename__ = "articles"
 
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    id: Mapped[str] = mapped_column(String(256), primary_key=True)
     source: Mapped[str] = mapped_column(String(64))
     external_id: Mapped[str] = mapped_column(String(128))
     title: Mapped[str] = mapped_column(Text)
