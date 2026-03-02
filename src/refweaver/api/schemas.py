@@ -1,13 +1,14 @@
 """Request and response schemas for the API."""
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class AnalyzeRequest(BaseModel):
     """Request payload for analysis."""
 
+    model_config = ConfigDict(extra="forbid")
+
     text: str = Field(..., description="Input text to analyze")
-    mode: str = Field(default="paragraph", description="sentence|paragraph|document")
     async_mode: bool = Field(default=False, description="Run analysis asynchronously")
     include_markdown: bool = Field(default=True)
 
@@ -16,15 +17,6 @@ class AnalyzeRequest(BaseModel):
     def validate_text(cls, value: str) -> str:
         if not value.strip():
             raise ValueError("text must be non-empty")
-        return value
-
-    @field_validator("mode")
-    @classmethod
-    def validate_mode(cls, value: str) -> str:
-        allowed = {"sentence", "paragraph", "document"}
-        if value not in allowed:
-            msg = f"mode must be one of {sorted(allowed)}"
-            raise ValueError(msg)
         return value
 
     @model_validator(mode="after")
