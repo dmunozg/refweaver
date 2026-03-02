@@ -16,3 +16,8 @@ def get_session(database_url: str) -> Session:
     engine = get_engine(database_url)
     maker = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
     return maker()
+
+
+def get_sessionmaker(engine: Engine) -> sessionmaker[Session]:
+    """Create a sessionmaker bound to the engine."""
+    return sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)

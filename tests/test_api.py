@@ -1,7 +1,9 @@
 """Tests for the FastAPI scaffolding."""
 
+from collections.abc import Iterator
 from unittest.mock import MagicMock, patch
 
+import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 
@@ -10,8 +12,13 @@ from refweaver.api.main import app
 from refweaver.api.schemas import ErrorResponse
 
 
-def test_health_endpoint_ok() -> None:
-    client = TestClient(app)
+@pytest.fixture
+def client() -> Iterator[TestClient]:
+    with TestClient(app) as client:
+        yield client
+
+
+def test_health_endpoint_ok(client: TestClient) -> None:
     response = client.get("/health", headers={"X-User-Id": "user-1"})
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == {"status": "ok"}
@@ -26,14 +33,12 @@ def test_http_error_payload_shape() -> None:
     assert payload.details is None
 
 
-def test_analyze_requires_user_header() -> None:
-    client = TestClient(app)
+def test_analyze_requires_user_header(client: TestClient) -> None:
     response = client.post("/analyze", json={"text": "Hello world"})
     assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
-def test_analyze_sync_returns_results() -> None:
-    client = TestClient(app)
+def test_analyze_sync_returns_results(client: TestClient) -> None:
     payload = {
         "text": "This is a test sentence.",
         "include_markdown": False,
@@ -52,8 +57,7 @@ def test_analyze_sync_returns_results() -> None:
     assert data["results"] is not None
 
 
-def test_analyze_rejects_empty_text() -> None:
-    client = TestClient(app)
+def test_analyze_rejects_empty_text(client: TestClient) -> None:
     response = client.post(
         "/analyze",
         headers={"X-User-Id": "user-1"},
@@ -62,20 +66,17 @@ def test_analyze_rejects_empty_text() -> None:
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
 
-def test_search_requires_user_header() -> None:
-    client = TestClient(app)
+def test_search_requires_user_header(client: TestClient) -> None:
     response = client.post("/search", json={"query": "test"})
     assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
-def test_jobs_requires_user_header() -> None:
-    client = TestClient(app)
+def test_jobs_requires_user_header(client: TestClient) -> None:
     response = client.get("/jobs/123")
     assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
-def test_search_basic() -> None:
-    client = TestClient(app)
+def test_search_basic(client: TestClient) -> None:
     with patch("refweaver.api.routes.search.UnifiedSearch") as searcher_factory:
         searcher = MagicMock()
         searcher.search.return_value = []
@@ -90,8 +91,7 @@ def test_search_basic() -> None:
     assert "results" in payload
 
 
-def test_search_rejects_empty_query() -> None:
-    client = TestClient(app)
+def test_search_rejects_empty_query(client: TestClient) -> None:
     response = client.post(
         "/search",
         headers={"X-User-Id": "user-1"},
@@ -100,20 +100,17 @@ def test_search_rejects_empty_query() -> None:
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
 
-def test_enrich_requires_user_header() -> None:
-    client = TestClient(app)
+def test_enrich_requires_user_header(client: TestClient) -> None:
     response = client.post("/enrich", json={"articles": []})
     assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
-def test_report_requires_user_header() -> None:
-    client = TestClient(app)
+def test_report_requires_user_header(client: TestClient) -> None:
     response = client.post("/report", json={"run_id": "run"})
     assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
-def test_rate_limit_enforced() -> None:
-    client = TestClient(app)
+def test_rate_limit_enforced(client: TestClient) -> None:
     with patch("refweaver.api.dependencies.SETTINGS") as settings:
         settings.rate_limit_per_minute = 1
         settings.rate_limit_backend = "memory"
@@ -126,8 +123,7 @@ def test_rate_limit_enforced() -> None:
         assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
 
 
-def test_rate_limit_redis_backend() -> None:
-    client = TestClient(app)
+def test_rate_limit_redis_backend(client: TestClient) -> None:
     with patch("refweaver.api.dependencies.SETTINGS") as settings:
         settings.rate_limit_per_minute = 1
         settings.rate_limit_backend = "redis"
@@ -144,8 +140,7 @@ def test_rate_limit_redis_backend() -> None:
             assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
 
 
-def test_request_size_limit_enforced() -> None:
-    client = TestClient(app)
+def test_request_size_limit_enforced(client: TestClient) -> None:
     with patch("refweaver.api.middleware.SETTINGS") as settings:
         settings.max_request_bytes = 10
         settings.rate_limit_per_minute = 0
@@ -160,8 +155,7 @@ def test_request_size_limit_enforced() -> None:
         assert response.status_code == status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
 
 
-def test_request_size_limit_enforced_without_length() -> None:
-    client = TestClient(app)
+def test_request_size_limit_enforced_without_length(client: TestClient) -> None:
     with patch("refweaver.api.middleware.SETTINGS") as settings:
         settings.max_request_bytes = 10
         settings.rate_limit_per_minute = 0

@@ -3,11 +3,14 @@
 import threading
 import time
 from collections import defaultdict, deque
+from collections.abc import Iterator
 
-from fastapi import Depends, Header
+from fastapi import Depends, Header, HTTPException, Request
+from sqlalchemy.orm import Session
 
 from refweaver.api.errors import http_error
 from refweaver.api.settings import SETTINGS
+from refweaver.db.session import get_sessionmaker
 
 
 def get_user_id(
@@ -68,3 +71,16 @@ def rate_limit_user(user_id: str = Depends(get_user_id)) -> None:
                 details={"limit_per_minute": str(limit)},
             )
         bucket.append(now)
+
+
+def get_db_session(request: Request) -> Iterator[Session]:
+    engine = getattr(request.app.state, "engine", None)
+    if engine is None:
+        raise HTTPException(status_code=500, detail="Database engine is not initialized")
+
+    maker = get_sessionmaker(engine)
+    session = maker()
+    try:
+        yield session
+    finally:
+        session.close()

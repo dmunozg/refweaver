@@ -1,13 +1,14 @@
 """Run retrieval endpoints."""
 
-from fastapi import APIRouter, Depends, Query
+from typing import Annotated
 
-from refweaver.api.dependencies import get_user_id, rate_limit_user, verify_api_key
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
+
+from refweaver.api.dependencies import get_db_session, get_user_id, rate_limit_user, verify_api_key
 from refweaver.api.errors import http_error
 from refweaver.api.reporting import build_run_report
-from refweaver.api.settings import SETTINGS
 from refweaver.db.models import ArticleRecord, EvaluationRecord, Run, SentenceRecord, VerdictRecord
-from refweaver.db.session import get_session
 
 router = APIRouter(
     tags=["runs"],
@@ -30,10 +31,10 @@ def _serialize_run(run: Run) -> dict[str, object]:
 @router.get("/runs/{run_id}")
 def get_run(
     run_id: str,
+    session: Annotated[Session, Depends(get_db_session)],
     user_id: str = Depends(get_user_id),
     format: str = Query(default="json"),
 ) -> dict[str, object]:
-    session = get_session(SETTINGS.database_url)
     run = session.get(Run, run_id)
     if run is None or run.user_id != user_id:
         raise http_error("not_found", "Run not found", status_code=404)

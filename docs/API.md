@@ -19,6 +19,8 @@ For local development, run the FastAPI app with Uvicorn:
 uvicorn refweaver.api.main:app --reload
 ```
 
+- Database connections are pooled via a shared engine created at API startup.
+
 ## Authentication and Headers
 
 Required headers:
