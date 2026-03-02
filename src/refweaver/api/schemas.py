@@ -1,6 +1,6 @@
 """Request and response schemas for the API."""
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class AnalyzeRequest(BaseModel):
@@ -18,10 +18,6 @@ class AnalyzeRequest(BaseModel):
         if not value.strip():
             raise ValueError("text must be non-empty")
         return value
-
-    @model_validator(mode="after")
-    def validate_async_mode(self) -> "AnalyzeRequest":
-        return self
 
 
 class AnalyzeResponse(BaseModel):
