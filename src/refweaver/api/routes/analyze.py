@@ -31,23 +31,20 @@ def analyze_text(
     validate_text_length(payload.text, max_tokens=SETTINGS.max_input_tokens)
 
     run_id = uuid4().hex
-        try:
-            create_queued_run(
-                session,
-                run_id=run_id,
-                user_id=user_id,
-                mode=payload.mode,
-                input_text=payload.text,
-            )
-            job_id = enqueue_job(
-                "refweaver.jobs.analyze_paragraph_job",
-                payload.text,
-                run_id=run_id,
-                user_id=user_id,
-                include_markdown=payload.include_markdown,
-            )
-        finally:
-            session.close()
+    if payload.async_mode or len(payload.text) > SETTINGS.run_async_threshold:
+        create_queued_run(
+            session,
+            run_id=run_id,
+            user_id=user_id,
+            input_text=payload.text,
+        )
+        job_id = enqueue_job(
+            "refweaver.jobs.analyze_paragraph_job",
+            payload.text,
+            run_id=run_id,
+            user_id=user_id,
+            include_markdown=payload.include_markdown,
+        )
         return AnalyzeResponse(
             run_id=run_id,
             status="queued",
