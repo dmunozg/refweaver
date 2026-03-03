@@ -318,3 +318,25 @@ def test_request_size_limit_enforced_without_length(client: TestClient) -> None:
             json={"text": "This is a test sentence."},
         )
         assert response.status_code == status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
+
+
+def test_request_size_limit_allows_small_payload(client: TestClient) -> None:
+    with patch("refweaver.api.middleware.SETTINGS") as settings:
+        settings.max_request_bytes = 10_000
+        settings.rate_limit_per_minute = 0
+        settings.api_key = None
+        settings.api_user_header = "X-User-Id"
+        settings.api_key_header = "X-API-Key"
+        with patch("refweaver.api.routes.analyze.analyze_paragraph_job") as job:
+            job.return_value = {
+                "run_id": "run",
+                "user_id": "user-1",
+                "results": [],
+                "markdown_report": None,
+            }
+            response = client.post(
+                "/analyze",
+                headers={"X-User-Id": "user-1"},
+                json={"text": "This is a test sentence."},
+            )
+        assert response.status_code == status.HTTP_200_OK
