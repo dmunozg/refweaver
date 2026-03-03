@@ -18,6 +18,7 @@ from refweaver.db.models import (
     VerdictRecord,
 )
 from refweaver.db.persist import create_queued_run, persist_run_results
+from refweaver.db.session import get_engine_cached, session_scope
 from refweaver.evaluation_models import FinalVerdict, SentenceEvaluation, SourceIdentifier
 from pydantic import HttpUrl
 
@@ -28,6 +29,28 @@ def _make_session() -> tuple[Session, Engine]:
     engine = create_engine("sqlite:///:memory:", future=True)
     Base.metadata.create_all(engine)
     return Session(engine), engine
+
+
+def test_engine_cache_reuses_engine() -> None:
+    engine_one = get_engine_cached("sqlite:///:memory:")
+    engine_two = get_engine_cached("sqlite:///:memory:")
+    assert engine_one is engine_two
+
+
+def test_session_scope_closes_session() -> None:
+    engine = get_engine_cached("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    closed = {"called": False}
+    with session_scope(engine) as session:
+        original_close = session.close
+
+        def _close() -> None:
+            closed["called"] = True
+            original_close()
+
+        session.close = _close  # type: ignore[assignment]
+        assert session.is_active
+    assert closed["called"] is True
 
 
 def test_create_all_models_directly() -> None:
