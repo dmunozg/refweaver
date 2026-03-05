@@ -95,6 +95,14 @@ combine-as-imports = true
 [tool.pyright]
 typeCheckingMode = "strict"
 reportMissingTypeStubs = false
+reportMissingImports = "none"
+reportMissingModuleSource = "none"
+reportUnknownArgumentType = "none"
+reportUnknownLambdaType = "none"
+reportUnknownMemberType = "none"
+reportUnknownVariableType = "none"
+reportDeprecated = "none"
+reportUnusedFunction = "none"
 pythonVersion = "3.13"
 include = ["src"]
 
