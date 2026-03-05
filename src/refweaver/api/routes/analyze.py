@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from refweaver.api.dependencies import get_db_session, get_user_id, rate_limit_user, verify_api_key
+from refweaver.api.errors import http_error
 from refweaver.api.schemas import AnalyzeRequest, AnalyzeResponse
 from refweaver.api.settings import SETTINGS
 from refweaver.db.persist import create_queued_run
@@ -28,7 +29,15 @@ def analyze_text(
     session: Annotated[Session, Depends(get_db_session)],
     user_id: str = Depends(get_user_id),
 ) -> AnalyzeResponse:
-    validate_text_length(payload.text, max_tokens=SETTINGS.max_input_tokens)
+    try:
+        validate_text_length(payload.text, max_tokens=SETTINGS.max_input_tokens)
+    except ValueError as exc:
+        raise http_error(
+            "input_too_long",
+            str(exc),
+            status_code=413,
+            details={"max_tokens": str(SETTINGS.max_input_tokens)},
+        ) from exc
 
     run_id = uuid4().hex
     if payload.async_mode or len(payload.text) > SETTINGS.run_async_threshold:

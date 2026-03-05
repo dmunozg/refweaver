@@ -104,6 +104,20 @@ def test_analyze_rejects_mode_field(client: TestClient) -> None:
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
 
+def test_analyze_rejects_input_too_long(client: TestClient) -> None:
+    with patch("refweaver.api.routes.analyze.SETTINGS") as settings:
+        settings.max_input_tokens = 1
+        settings.run_async_threshold = 2000
+        response = client.post(
+            "/analyze",
+            headers={"X-User-Id": "user-1"},
+            json={"text": "word word"},
+        )
+    assert response.status_code == status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
+    payload = response.json()
+    assert payload["detail"]["error_code"] == "input_too_long"
+
+
 def test_search_requires_user_header(client: TestClient) -> None:
     response = client.post("/search", json={"query": "test"})
     assert response.status_code == status.HTTP_400_BAD_REQUEST
