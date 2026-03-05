@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import status
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
-from starlette.requests import Request
+from starlette.requests import ClientDisconnect, Request
 from starlette.responses import JSONResponse, Response
 
 from refweaver.api.settings import SETTINGS
@@ -44,7 +44,17 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
                     },
                 )
 
-        body = await request.body()
+        try:
+            body = await request.body()
+        except ClientDisconnect:
+            return JSONResponse(
+                status_code=499,
+                content={
+                    "error_code": "client_disconnected",
+                    "message": "Client disconnected while streaming request body",
+                    "details": None,
+                },
+            )
         if len(body) > limit:
             return JSONResponse(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
@@ -55,6 +65,8 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
                 },
             )
 
-        request = Request(request.scope, receive=request.receive)
-        request._body = body
+        async def receive() -> dict[str, object]:
+            return {"type": "http.request", "body": body, "more_body": False}
+
+        request = Request(request.scope, receive=receive)
         return await call_next(request)
