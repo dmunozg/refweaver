@@ -15,9 +15,9 @@ def normalize_title(title: str) -> str:
     # Convert to lowercase
     normalized = title.lower()
     # Remove common punctuation and special chars
-    normalized = re.sub(r'[^\w\s]', '', normalized)
+    normalized = re.sub(r"[^\w\s]", "", normalized)
     # Normalize whitespace
-    normalized = ' '.join(normalized.split())
+    normalized = " ".join(normalized.split())
     return normalized
 
 
@@ -57,7 +57,7 @@ def author_overlap(authors1: list[str], authors2: list[str]) -> float:
     # Normalize author names for comparison
     def normalize_author(name: str) -> str:
         # Lowercase and remove extra whitespace
-        return ' '.join(name.lower().split())
+        return " ".join(name.lower().split())
 
     set1: set[str] = {normalize_author(a) for a in authors1}
     set2: set[str] = {normalize_author(a) for a in authors2}
@@ -94,8 +94,7 @@ def are_articles_duplicate(
         True if articles are likely the same, False otherwise
     """
     # Same source and same external ID = definitely same article
-    if (article1.source == article2.source and
-        article1.external_id == article2.external_id):
+    if article1.source == article2.source and article1.external_id == article2.external_id:
         return True
 
     # DOI match (the gold standard)
@@ -107,11 +106,7 @@ def are_articles_duplicate(
             return True
 
     # If years don't match, they're probably not the same article
-    if (
-        article1.year is not None
-        and article2.year is not None
-        and article1.year != article2.year
-    ):
+    if article1.year is not None and article2.year is not None and article1.year != article2.year:
         return False
 
     # Check title similarity
@@ -244,8 +239,7 @@ def merge_articles(articles: list[Article]) -> Article | None:
         pdf_url=pdf_url,
         open_access=any(a.open_access for a in articles),
         citation_count=max(
-            (a.citation_count for a in articles if a.citation_count is not None),
-            default=None
+            (a.citation_count for a in articles if a.citation_count is not None), default=None
         ),
         retrieved_at=date.today(),
     )

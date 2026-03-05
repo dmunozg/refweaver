@@ -1,0 +1,86 @@
+"""Shared FastAPI dependencies."""
+
+import threading
+import time
+from collections import defaultdict, deque
+from collections.abc import Iterator
+
+from fastapi import Depends, Header, HTTPException, Request
+from sqlalchemy.orm import Session
+
+from refweaver.api.errors import http_error
+from refweaver.api.settings import SETTINGS
+from refweaver.db.session import get_sessionmaker
+
+
+def get_user_id(
+    user_id: str | None = Header(default=None, alias=SETTINGS.api_user_header),
+) -> str:
+    if not user_id:
+        raise http_error("missing_user", "Missing user id header", status_code=400)
+    return user_id
+
+
+def verify_api_key(
+    api_key: str | None = Header(default=None, alias=SETTINGS.api_key_header),
+) -> None:
+    if SETTINGS.api_key is None:
+        return
+    if api_key != SETTINGS.api_key:
+        raise http_error("unauthorized", "Invalid API key", status_code=401)
+
+
+_RATE_LIMIT_LOCK = threading.Lock()
+_RATE_LIMIT_BUCKETS: dict[str, deque[float]] = defaultdict(deque)
+
+
+def rate_limit_user(user_id: str = Depends(get_user_id)) -> None:
+    """Enforce a simple per-user request limit per minute."""
+    limit = SETTINGS.rate_limit_per_minute
+    if limit <= 0:
+        return
+
+    if SETTINGS.rate_limit_backend == "redis":
+        from refweaver.queue import get_redis_connection
+
+        redis = get_redis_connection()
+        key = f"refweaver:rate:{user_id}"
+        count = redis.incr(key)
+        if count == 1:
+            redis.expire(key, 60)
+        if count > limit:
+            raise http_error(
+                "rate_limited",
+                "Rate limit exceeded",
+                status_code=429,
+                details={"limit_per_minute": str(limit)},
+            )
+        return
+
+    now = time.monotonic()
+    cutoff = now - 60.0
+    with _RATE_LIMIT_LOCK:
+        bucket = _RATE_LIMIT_BUCKETS[user_id]
+        while bucket and bucket[0] < cutoff:
+            bucket.popleft()
+        if len(bucket) >= limit:
+            raise http_error(
+                "rate_limited",
+                "Rate limit exceeded",
+                status_code=429,
+                details={"limit_per_minute": str(limit)},
+            )
+        bucket.append(now)
+
+
+def get_db_session(request: Request) -> Iterator[Session]:
+    engine = getattr(request.app.state, "engine", None)
+    if engine is None:
+        raise HTTPException(status_code=500, detail="Database engine is not initialized")
+
+    maker = get_sessionmaker(engine)
+    session = maker()
+    try:
+        yield session
+    finally:
+        session.close()

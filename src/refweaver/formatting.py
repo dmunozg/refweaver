@@ -62,7 +62,7 @@ def articles_to_table(
 
     # Try tabulate for nice formatting
     try:
-        from tabulate import tabulate  # type: ignore[import-untyped]
+        from tabulate import tabulate
 
         headers = [col.replace("_", " ").title() for col in columns]
         table_data = [[row.get(col, "-") for col in columns] for row in rows]
@@ -387,6 +387,6 @@ def _model_dump(obj: Any) -> Any:
         return obj.model_dump(mode="json")
     if isinstance(obj, dict):
         return {key: _model_dump(value) for key, value in obj.items()}
-    if isinstance(obj, (list, tuple, set)):
+    if isinstance(obj, list | tuple | set):
         return [_model_dump(item) for item in obj]
     return obj
