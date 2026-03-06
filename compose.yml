@@ -1,4 +1,30 @@
 services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:?err}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?err}
+      DATABASE_URL: postgres://refweaver:${DB_PASSWORD}@postgres:5432/refweaver
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: refweaver
+      POSTGRES_DB: refweaver
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?err}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U refweaver -d refweaver"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   redis:
     image: redis/redis-stack:7.2.0-v9
     ports:
@@ -6,6 +32,11 @@ services:
       - "8001:8001"
     volumes:
       - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   redis-data:
