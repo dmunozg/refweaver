@@ -1,7 +1,9 @@
-FROM python:3.13-alpine
+FROM python:3.13.2-alpine
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
 
 RUN addgroup -S app && adduser -S -G app app
 
