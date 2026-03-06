@@ -18,7 +18,7 @@ from refweaver.db.models import (
     VerdictRecord,
 )
 from refweaver.db.persist import create_queued_run, persist_run_results
-from _pytest.monkeypatch import MonkeyPatch
+from pytest import MonkeyPatch
 
 from refweaver.db import session as session_module
 from refweaver.db.session import get_engine_cached, session_scope
@@ -50,12 +50,15 @@ def test_engine_kwargs_for_sqlite_vs_postgres(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(session_module, "create_engine", _fake_create_engine)
 
     session_module.get_engine("sqlite:///./refweaver.db")
+    session_module.get_engine("sqlite+pysqlite:///./refweaver.db")
     session_module.get_engine("postgresql+psycopg://user:pass@localhost/db")
 
     assert calls[0][1]["connect_args"] == {"check_same_thread": False}
     assert calls[0][0] == "sqlite:///./refweaver.db"
-    assert calls[1][0] == "postgresql+psycopg://user:pass@localhost/db"
-    assert "connect_args" not in calls[1][1]
+    assert calls[1][0] == "sqlite+pysqlite:///./refweaver.db"
+    assert calls[2][0] == "postgresql+psycopg://user:pass@localhost/db"
+    assert calls[1][1]["connect_args"] == {"check_same_thread": False}
+    assert "connect_args" not in calls[2][1]
 
 
 def test_session_scope_closes_session() -> None:

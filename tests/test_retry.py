@@ -5,11 +5,12 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from pytest import MonkeyPatch
 
 from refweaver.retry import retry_call
 
 
-def test_retry_call_succeeds_after_retry(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_retry_call_succeeds_after_retry(monkeypatch: MonkeyPatch) -> None:
     calls: list[int] = []
 
     def flaky() -> str:
@@ -33,7 +34,7 @@ def test_retry_call_succeeds_after_retry(monkeypatch: pytest.MonkeyPatch) -> Non
     assert sleeps == [0.5]
 
 
-def test_retry_call_raises_after_exhaustion(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_retry_call_raises_after_exhaustion(monkeypatch: MonkeyPatch) -> None:
     calls: list[int] = []
 
     def always_fail() -> None:
@@ -56,7 +57,7 @@ def test_retry_call_raises_after_exhaustion(monkeypatch: pytest.MonkeyPatch) -> 
 
 
 def test_retry_call_only_retries_selected_exceptions(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: MonkeyPatch,
 ) -> None:
     calls: list[int] = []
 
@@ -75,7 +76,7 @@ def test_retry_call_only_retries_selected_exceptions(
     assert len(calls) == 1
 
 
-def test_retry_call_passes_args_kwargs(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_retry_call_passes_args_kwargs(monkeypatch: MonkeyPatch) -> None:
     def echo(a: int, b: int, *, c: int) -> tuple[int, int, int]:
         return a, b, c
 

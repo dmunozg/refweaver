@@ -6,13 +6,14 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 from sqlalchemy import Engine, create_engine
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session, sessionmaker
 
 _ENGINE_CACHE: dict[str, Engine] = {}
 
 
 def _engine_kwargs(database_url: str) -> dict[str, object]:
-    if database_url.startswith("sqlite:"):
+    if make_url(database_url).get_backend_name() == "sqlite":
         return {"connect_args": {"check_same_thread": False}}
     return {}
 
