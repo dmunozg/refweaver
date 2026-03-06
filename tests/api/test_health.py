@@ -39,7 +39,7 @@ def test_health_reports_db_and_redis_ok(client: TestClient) -> None:
     assert payload["redis"]["status"] == "ok"
 
 
-def test_health_reports_error_and_503(client: TestClient) -> None:
+def test_health_reports_db_error_and_503(client: TestClient) -> None:
     engine = MagicMock()
     engine.connect.side_effect = RuntimeError("db down")
 

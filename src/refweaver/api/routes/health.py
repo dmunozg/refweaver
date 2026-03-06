@@ -30,7 +30,7 @@ def _check_redis() -> HealthCheck:
         return HealthCheck(status="error", message=str(exc))
 
 
-@router.get("/health", response_model=HealthResponse)
+@router.get("/health", response_model=HealthResponse, responses={503: {"model": HealthResponse}})
 def health(request: Request) -> HealthResponse | Response:
     """Return service health status."""
     engine = getattr(request.app.state, "engine", None)
