@@ -6,7 +6,7 @@ services:
     environment:
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:?err}
       OPENAI_API_KEY: ${OPENAI_API_KEY:?err}
-      DATABASE_URL: postgres://refweaver:${DB_PASSWORD}@postgres:5432/refweaver
+      DATABASE_URL: postgres://refweaver:${DB_PASSWORD:?err}@postgres:5432/refweaver
     depends_on:
       redis:
         condition: service_healthy
