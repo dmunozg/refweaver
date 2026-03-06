@@ -33,6 +33,12 @@ refweaver/
 
 ## Podman Compose
 
+Prerequisites: Podman and `podman compose` installed.
+
+Set environment variables in a `.env` file next to `compose.yml` or export them in your shell.
+
+Port is defined in `compose.yml` and can be changed there.
+
 Required environment variables:
 - `OPENAI_BASE_URL`
 - `OPENAI_API_KEY`
