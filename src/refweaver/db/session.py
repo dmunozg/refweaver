@@ -11,15 +11,23 @@ from sqlalchemy.orm import Session, sessionmaker
 _ENGINE_CACHE: dict[str, Engine] = {}
 
 
+def _engine_kwargs(database_url: str) -> dict[str, object]:
+    if database_url.startswith("sqlite:"):
+        return {"connect_args": {"check_same_thread": False}}
+    return {}
+
+
 def get_engine(database_url: str) -> Engine:
     """Create a SQLAlchemy engine."""
-    return create_engine(database_url, future=True)
+    return create_engine(database_url, future=True, **_engine_kwargs(database_url))
 
 
 def get_engine_cached(database_url: str) -> Engine:
     """Return a cached SQLAlchemy engine for the URL."""
     if database_url not in _ENGINE_CACHE:
-        _ENGINE_CACHE[database_url] = create_engine(database_url, future=True)
+        _ENGINE_CACHE[database_url] = create_engine(
+            database_url, future=True, **_engine_kwargs(database_url)
+        )
     return _ENGINE_CACHE[database_url]
 
 
