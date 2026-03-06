@@ -19,9 +19,13 @@ def client() -> Iterator[TestClient]:
 
 
 def test_health_endpoint_ok(client: TestClient) -> None:
-    response = client.get("/health", headers={"X-User-Id": "user-1"})
+    with patch("refweaver.api.routes.health.ping_redis", return_value=True):
+        response = client.get("/health")
     assert response.status_code == status.HTTP_200_OK
-    assert response.json() == {"status": "ok"}
+    payload = response.json()
+    assert payload["status"] == "ok"
+    assert payload["db"]["status"] == "ok"
+    assert payload["redis"]["status"] == "ok"
 
 
 def test_http_error_payload_shape() -> None:
@@ -281,10 +285,12 @@ def test_rate_limit_enforced(client: TestClient) -> None:
         settings.api_key = None
         settings.api_user_header = "X-User-Id"
         settings.api_key_header = "X-API-Key"
-        response = client.get("/health", headers={"X-User-Id": "user-1"})
-        assert response.status_code == status.HTTP_200_OK
-        response = client.get("/health", headers={"X-User-Id": "user-1"})
-        assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+        with patch("refweaver.api.routes.jobs.fetch_job") as fetch:
+            fetch.return_value = {"job_id": "job-1", "user_id": "user-1"}
+            response = client.get("/jobs/job-1", headers={"X-User-Id": "user-1"})
+            assert response.status_code == status.HTTP_200_OK
+            response = client.get("/jobs/job-1", headers={"X-User-Id": "user-1"})
+            assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
 
 
 def test_rate_limit_redis_backend(client: TestClient) -> None:
@@ -298,10 +304,12 @@ def test_rate_limit_redis_backend(client: TestClient) -> None:
             redis = MagicMock()
             redis.incr.side_effect = [1, 2]
             get_redis.return_value = redis
-            response = client.get("/health", headers={"X-User-Id": "user-1"})
-            assert response.status_code == status.HTTP_200_OK
-            response = client.get("/health", headers={"X-User-Id": "user-1"})
-            assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
+            with patch("refweaver.api.routes.jobs.fetch_job") as fetch:
+                fetch.return_value = {"job_id": "job-1", "user_id": "user-1"}
+                response = client.get("/jobs/job-1", headers={"X-User-Id": "user-1"})
+                assert response.status_code == status.HTTP_200_OK
+                response = client.get("/jobs/job-1", headers={"X-User-Id": "user-1"})
+                assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
 
 
 def test_request_size_limit_enforced(client: TestClient) -> None:

@@ -22,6 +22,12 @@ def get_queue(name: str | None = None) -> Queue:
     return Queue(queue_name, connection=get_redis_connection())
 
 
+def ping_redis() -> bool:
+    """Ping Redis and return True on success."""
+    redis = get_redis_connection()
+    return bool(redis.ping())
+
+
 def enqueue_job(
     func: str,
     *args: Any,

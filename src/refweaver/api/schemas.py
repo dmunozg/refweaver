@@ -39,7 +39,16 @@ class ErrorResponse(BaseModel):
     details: dict[str, str] | None = Field(default=None)
 
 
+class HealthCheck(BaseModel):
+    """Status of a dependent service."""
+
+    status: str
+    message: str | None = None
+
+
 class HealthResponse(BaseModel):
     """Basic service health response."""
 
     status: str = Field(default="ok")
+    db: HealthCheck | None = None
+    redis: HealthCheck | None = None
