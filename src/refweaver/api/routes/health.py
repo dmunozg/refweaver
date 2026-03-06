@@ -1,6 +1,7 @@
 """Health check endpoint."""
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response, status
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from refweaver.api.schemas import HealthCheck, HealthResponse
@@ -30,10 +31,16 @@ def _check_redis() -> HealthCheck:
 
 
 @router.get("/health", response_model=HealthResponse)
-def health(request: Request) -> HealthResponse:
+def health(request: Request) -> HealthResponse | Response:
     """Return service health status."""
     engine = getattr(request.app.state, "engine", None)
     db_status = _check_db(engine)
     redis_status = _check_redis()
     overall = "ok" if db_status.status == "ok" and redis_status.status == "ok" else "error"
-    return HealthResponse(status=overall, db=db_status, redis=redis_status)
+    response = HealthResponse(status=overall, db=db_status, redis=redis_status)
+    if overall == "ok":
+        return response
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content=response.model_dump(),
+    )

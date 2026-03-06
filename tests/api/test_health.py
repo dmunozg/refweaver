@@ -37,3 +37,25 @@ def test_health_reports_db_and_redis_ok(client: TestClient) -> None:
     assert payload["status"] == "ok"
     assert payload["db"]["status"] == "ok"
     assert payload["redis"]["status"] == "ok"
+
+
+def test_health_reports_error_and_503(client: TestClient) -> None:
+    engine = MagicMock()
+    engine.connect.side_effect = RuntimeError("db down")
+
+    old_engine = getattr(app.state, "engine", None)
+    app.state.engine = engine
+    try:
+        with patch("refweaver.api.routes.health.ping_redis", return_value=True):
+            response = client.get("/health")
+    finally:
+        if old_engine is None:
+            delattr(app.state, "engine")
+        else:
+            app.state.engine = old_engine
+
+    assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    payload = response.json()
+    assert payload["status"] == "error"
+    assert payload["db"]["status"] == "error"
+    assert payload["redis"]["status"] == "ok"
