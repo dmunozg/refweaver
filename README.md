@@ -31,6 +31,23 @@ refweaver/
 
 🚧 Work in progress - initial setup phase
 
+## Podman Compose
+
+Required environment variables:
+- `OPENAI_BASE_URL`
+- `OPENAI_API_KEY`
+- `DB_PASSWORD`
+
+Run the stack:
+```
+podman compose up --build
+```
+
+Health check:
+```
+curl http://localhost:8000/health
+```
+
 ## License
 
 MIT
