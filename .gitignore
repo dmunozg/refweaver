@@ -62,4 +62,3 @@ AGENTS.md
 *.log
 *.jsonl
 .worktrees/
-docs/plans/*
