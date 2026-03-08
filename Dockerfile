@@ -20,6 +20,7 @@ RUN apk add --no-cache \
     tesseract-ocr-dev \
     leptonica-dev \
     protobuf \
+    protobuf-dev \
     postgresql-dev
 
 WORKDIR /app
