@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: ["refweaver-api"]
+    command: ["python", "-m", "refweaver.api.main"]
     environment:
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:?err}
       OPENAI_API_KEY: ${OPENAI_API_KEY:?err}
