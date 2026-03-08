@@ -40,7 +40,7 @@ RUN pip install --no-cache-dir --upgrade pip \
         openai>=1.0.0 \
         psycopg[binary]>=3.2.0 \
         pyalex>=0.20.0 \
-        "pydantic-ai[openai]>=0.0.1" \
+        "pydantic-ai-slim[openai]>=1.67.0" \
         pymupdf>=1.23.0 \
         redis>=5.0.0 \
         requests>=2.32.0 \
