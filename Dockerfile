@@ -19,6 +19,7 @@ RUN apk add --no-cache \
     openjpeg-dev \
     tesseract-ocr-dev \
     leptonica-dev \
+    protobuf \
     postgresql-dev
 
 WORKDIR /app
