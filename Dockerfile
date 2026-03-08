@@ -24,12 +24,11 @@ RUN apk add --no-cache \
 WORKDIR /app
 
 COPY pyproject.toml ./
-COPY requirements.txt ./
+COPY README.md ./
+COPY src ./src
 
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt
-
-COPY src ./src
+    && pip install --no-cache-dir .
 
 USER app
 
