@@ -1,7 +1,7 @@
 """Tests for LLM client with pydantic-ai structured output."""
 
-
 import pytest
+from _pytest.monkeypatch import MonkeyPatch
 
 from refweaver.llm import (
     ArticleRelevance,
@@ -16,16 +16,17 @@ from refweaver.llm import (
 class TestLLMConfig:
     """Test suite for LLM configuration."""
 
-    def test_default_config(self, monkeypatch):
+    def test_default_config(self, monkeypatch: MonkeyPatch):
         """Test default configuration values."""
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
         config = LLMConfig()
         assert config.base_url == "http://127.0.0.1:11435/v1"
         assert config.api_key == "not-needed"
         assert config.max_tokens == 4096
         assert config.temperature == 0.1
 
-    def test_custom_config_from_env(self, monkeypatch):
+    def test_custom_config_from_env(self, monkeypatch: MonkeyPatch):
         """Test configuration from environment variables."""
         monkeypatch.setenv("OPENAI_BASE_URL", "http://custom:8080/v1")
         monkeypatch.setenv("OPENAI_API_KEY", "secret-key")

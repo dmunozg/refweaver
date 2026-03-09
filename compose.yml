@@ -4,10 +4,16 @@ services:
       context: .
       dockerfile: Dockerfile
     command: ["python", "-m", "refweaver.api.main"]
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
     environment:
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:?err}
       OPENAI_API_KEY: ${OPENAI_API_KEY:?err}
+      LLM_BASE_URL: http://host.containers.internal:11435/v1
       DATABASE_URL: postgresql+psycopg://refweaver:${DB_PASSWORD:?err}@postgres:5432/refweaver
+      REFWEAVER_REDIS_URL: redis://redis:6379/0
     depends_on:
       redis:
         condition: service_healthy
