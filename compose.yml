@@ -14,6 +14,7 @@ services:
       LLM_BASE_URL: http://host.containers.internal:11435/v1
       DATABASE_URL: postgresql+psycopg://refweaver:${DB_PASSWORD:?err}@postgres:5432/refweaver
       REFWEAVER_REDIS_URL: redis://redis:6379/0
+      REFWEAVER_JOB_TIMEOUT: "259200"
     depends_on:
       redis:
         condition: service_healthy
@@ -33,6 +34,7 @@ services:
       LLM_BASE_URL: http://host.containers.internal:11435/v1
       DATABASE_URL: postgresql+psycopg://refweaver:${DB_PASSWORD:?err}@postgres:5432/refweaver
       REFWEAVER_REDIS_URL: redis://redis:6379/0
+      REFWEAVER_JOB_TIMEOUT: "259200"
     depends_on:
       redis:
         condition: service_healthy
