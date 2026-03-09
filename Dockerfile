@@ -27,7 +27,10 @@ WORKDIR /app
 
 COPY pyproject.toml ./
 COPY README.md ./
+COPY alembic.ini ./
+COPY alembic ./alembic
 COPY src ./src
+COPY docker-entrypoint.sh /usr/local/bin/refweaver-entrypoint.sh
 
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir \
@@ -50,6 +53,9 @@ RUN pip install --no-cache-dir --upgrade pip \
         sqlalchemy>=2.0.0 \
         uvicorn>=0.30.0
 
+RUN chmod +x /usr/local/bin/refweaver-entrypoint.sh
+
 USER app
 
-CMD ["python", "-m", "refweaver"]
+ENTRYPOINT ["/usr/local/bin/refweaver-entrypoint.sh"]
+CMD ["python", "-m", "refweaver.api.main"]

@@ -44,6 +44,8 @@ Required environment variables:
 - `OPENAI_API_KEY`
 - `DB_PASSWORD`
 
+Database migrations run automatically when the `api` service starts; ensure the database is reachable and credentials are correct so startup can succeed.
+
 Run the stack:
 ```
 podman compose up --build
