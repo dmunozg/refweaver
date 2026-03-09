@@ -31,7 +31,7 @@ def ping_redis() -> bool:
 def enqueue_job(
     func: str,
     *args: Any,
-    user_id: str | None = None,
+    metadata_user_id: str | None = None,
     **kwargs: Any,
 ) -> str:
     """Enqueue a job by function path and return job id."""
@@ -43,8 +43,14 @@ def enqueue_job(
 
     queue = get_queue()
     job = queue.enqueue(func, *args, **kwargs, job_timeout=timeout)
-    if user_id is not None:
-        job.meta["user_id"] = user_id
+    meta_user_id = metadata_user_id
+    if meta_user_id is None:
+        user_id_value = kwargs.get("user_id")
+        if isinstance(user_id_value, str):
+            meta_user_id = user_id_value
+
+    if meta_user_id is not None:
+        job.meta["user_id"] = meta_user_id
         job.save_meta()
     return str(job.id)
 
