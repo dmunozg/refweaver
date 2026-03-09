@@ -42,30 +42,10 @@ def test_analyze_requires_user_header(client: TestClient) -> None:
     assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
-def test_analyze_sync_returns_results(client: TestClient) -> None:
+def test_analyze_always_enqueues(client: TestClient) -> None:
     payload = {
         "text": "This is a test sentence.",
         "include_markdown": False,
-    }
-    with patch("refweaver.api.routes.analyze.analyze_paragraph_job") as job:
-        job.return_value = {
-            "run_id": "run",
-            "user_id": "user-1",
-            "results": [],
-            "markdown_report": None,
-        }
-        response = client.post("/analyze", headers={"X-User-Id": "user-1"}, json=payload)
-    assert response.status_code == status.HTTP_200_OK
-    data = response.json()
-    assert data["status"] == "completed"
-    assert data["results"] is not None
-
-
-def test_analyze_async_enqueues_with_user_id(client: TestClient) -> None:
-    payload = {
-        "text": "This is a test sentence.",
-        "async_mode": True,
-        "include_markdown": True,
     }
     with patch("refweaver.api.routes.analyze.create_queued_run") as create_run:
         with patch("refweaver.api.routes.analyze.enqueue_job") as enqueue:
@@ -78,16 +58,31 @@ def test_analyze_async_enqueues_with_user_id(client: TestClient) -> None:
     assert response.status_code == status.HTTP_200_OK
     response_payload = response.json()
     assert response_payload["status"] == "queued"
+    assert response_payload["job_id"] == "job-1"
     enqueue.assert_called_once()
     args, kwargs = enqueue.call_args
     assert args[0] == "refweaver.jobs.analyze_paragraph_job"
     assert args[1] == payload["text"]
     assert kwargs["user_id"] == "user-1"
-    assert kwargs["include_markdown"] is True
+    assert kwargs["include_markdown"] is False
     assert response_payload["run_id"] == kwargs["run_id"]
     create_run.assert_called_once()
     create_kwargs = create_run.call_args.kwargs
     assert create_kwargs["user_id"] == "user-1"
+
+
+def test_analyze_rejects_async_mode_field(client: TestClient) -> None:
+    payload = {
+        "text": "This is a test sentence.",
+        "async_mode": True,
+        "include_markdown": True,
+    }
+    response = client.post(
+        "/analyze",
+        headers={"X-User-Id": "user-1"},
+        json=payload,
+    )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
 
 def test_analyze_rejects_empty_text(client: TestClient) -> None:
@@ -111,7 +106,6 @@ def test_analyze_rejects_mode_field(client: TestClient) -> None:
 def test_analyze_rejects_input_too_long(client: TestClient) -> None:
     with patch("refweaver.api.routes.analyze.SETTINGS") as settings:
         settings.max_input_tokens = 1
-        settings.run_async_threshold = 2000
         response = client.post(
             "/analyze",
             headers={"X-User-Id": "user-1"},
@@ -349,16 +343,13 @@ def test_request_size_limit_allows_small_payload(client: TestClient) -> None:
         settings.api_key = None
         settings.api_user_header = "X-User-Id"
         settings.api_key_header = "X-API-Key"
-        with patch("refweaver.api.routes.analyze.analyze_paragraph_job") as job:
-            job.return_value = {
-                "run_id": "run",
-                "user_id": "user-1",
-                "results": [],
-                "markdown_report": None,
-            }
-            response = client.post(
-                "/analyze",
-                headers={"X-User-Id": "user-1"},
-                json={"text": "This is a test sentence."},
-            )
+        with patch("refweaver.api.routes.analyze.enqueue_job") as enqueue:
+            with patch("refweaver.api.routes.analyze.create_queued_run") as create_run:
+                enqueue.return_value = "job-1"
+                response = client.post(
+                    "/analyze",
+                    headers={"X-User-Id": "user-1"},
+                    json={"text": "This is a test sentence."},
+                )
         assert response.status_code == status.HTTP_200_OK
+        create_run.assert_called_once()

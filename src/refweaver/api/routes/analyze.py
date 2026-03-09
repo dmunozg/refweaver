@@ -13,7 +13,6 @@ from refweaver.api.errors import http_error
 from refweaver.api.schemas import AnalyzeRequest, AnalyzeResponse
 from refweaver.api.settings import SETTINGS
 from refweaver.db.persist import create_queued_run
-from refweaver.jobs import analyze_paragraph_job
 from refweaver.queue import enqueue_job
 from refweaver.text_utils import validate_text_length
 
@@ -40,28 +39,14 @@ def analyze_text(
         ) from exc
 
     run_id = uuid4().hex
-    if payload.async_mode or len(payload.text) > SETTINGS.run_async_threshold:
-        create_queued_run(
-            session,
-            run_id=run_id,
-            user_id=user_id,
-            input_text=payload.text,
-        )
-        job_id = enqueue_job(
-            "refweaver.jobs.analyze_paragraph_job",
-            payload.text,
-            run_id=run_id,
-            user_id=user_id,
-            include_markdown=payload.include_markdown,
-        )
-        return AnalyzeResponse(
-            run_id=run_id,
-            status="queued",
-            job_id=job_id,
-            job_url=f"/jobs/{job_id}",
-        )
-
-    result = analyze_paragraph_job(
+    create_queued_run(
+        session,
+        run_id=run_id,
+        user_id=user_id,
+        input_text=payload.text,
+    )
+    job_id = enqueue_job(
+        "refweaver.jobs.analyze_paragraph_job",
         payload.text,
         run_id=run_id,
         user_id=user_id,
@@ -69,7 +54,7 @@ def analyze_text(
     )
     return AnalyzeResponse(
         run_id=run_id,
-        status="completed",
-        results=result.get("results"),
-        markdown_report=result.get("markdown_report"),
+        status="queued",
+        job_id=job_id,
+        job_url=f"/jobs/{job_id}",
     )

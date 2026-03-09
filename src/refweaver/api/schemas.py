@@ -9,7 +9,6 @@ class AnalyzeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     text: str = Field(..., description="Input text to analyze")
-    async_mode: bool = Field(default=False, description="Run analysis asynchronously")
     include_markdown: bool = Field(default=True)
 
     @field_validator("text")

@@ -65,50 +65,19 @@ Analyze a sentence/paragraph/document and return results.
 Request body:
 
 - `text` (string, required): Input text to analyze.
-- `mode` (string, optional): `sentence`, `paragraph`, or `document`. Default: `paragraph`.
-- `async_mode` (boolean, optional): If true, enqueue a background job. Default: false.
 - `include_markdown` (boolean, optional): Include a markdown report. Default: true.
 
-Example (sync):
+Example:
 
 ```bash
 curl -s \
   -H "X-User-Id: user-1" \
   -H "Content-Type: application/json" \
-  -d '{"text":"This is a test sentence.","mode":"paragraph","include_markdown":false}' \
+  -d '{"text":"This is a test sentence."}' \
   http://localhost:8000/analyze
 ```
 
-Example (async):
-
-```bash
-curl -s \
-  -H "X-User-Id: user-1" \
-  -H "Content-Type: application/json" \
-  -d '{"text":"This is a test sentence.","async_mode":true}' \
-  http://localhost:8000/analyze
-```
-
-Response (sync):
-
-```json
-{
-  "run_id": "<run-id>",
-  "status": "completed",
-  "results": [
-    {
-      "sentence": {"text": "..."},
-      "sentence_for_evaluation": "...",
-      "sentence_original_text": "...",
-      "verdict": {"overall_assessment": "..."},
-      "evaluations": []
-    }
-  ],
-  "markdown_report": null
-}
-```
-
-Response (async):
+Response:
 
 ```json
 {
