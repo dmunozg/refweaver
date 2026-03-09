@@ -45,6 +45,8 @@ services:
       POSTGRES_USER: refweaver
       POSTGRES_DB: refweaver
       POSTGRES_PASSWORD: ${DB_PASSWORD:?err}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U refweaver -d refweaver"]
       interval: 10s
@@ -66,3 +68,4 @@ services:
 
 volumes:
   redis-data:
+  postgres-data:
