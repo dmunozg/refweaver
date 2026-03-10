@@ -123,13 +123,16 @@ def test_analyze_paragraph_with_evidence_short_sample_workflow():
         enricher=enricher,
     )
 
-    assert len(results) == 2
+    assert len(results) == 3
     assert results[0][0] == sentences[0]
     assert results[1][0] == sentences[1]
+    assert results[2][0] == sentences[2]
     assert results[0][1].overall_assessment == "WELL_SUPPORTED"
     assert results[1][1].overall_assessment == "WELL_SUPPORTED"
+    assert results[2][1].overall_assessment == "NO_REFERENCE_NEEDED"
     assert results[0][2] == evaluations_one
     assert results[1][2] == evaluations_two
+    assert results[2][2] == []
 
     analyzer.analyze_paragraph.assert_called_once_with(SHORT_SAMPLE)
     analyzer.generate_search_keywords.assert_any_call(sentences[0])

@@ -152,8 +152,14 @@ class FinalVerdict(BaseModel):
 
     overall_assessment: str = Field(
         ...,
-        description="Overall assessment: WELL_SUPPORTED, PARTIALLY_SUPPORTED, CONTRADICTED, INSUFFICIENT_EVIDENCE, or NOT_SUPPORTED",
-        pattern=r"^(WELL_SUPPORTED|PARTIALLY_SUPPORTED|CONTRADICTED|INSUFFICIENT_EVIDENCE|NOT_SUPPORTED)$",
+        description=(
+            "Overall assessment: WELL_SUPPORTED, PARTIALLY_SUPPORTED, CONTRADICTED, "
+            "INSUFFICIENT_EVIDENCE, NOT_SUPPORTED, or NO_REFERENCE_NEEDED"
+        ),
+        pattern=(
+            r"^(WELL_SUPPORTED|PARTIALLY_SUPPORTED|CONTRADICTED|INSUFFICIENT_EVIDENCE|"
+            r"NOT_SUPPORTED|NO_REFERENCE_NEEDED)$"
+        ),
     )
     confidence: float = Field(
         ...,

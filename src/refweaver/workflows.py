@@ -53,6 +53,16 @@ def analyze_paragraph_with_evidence(
 
     for sentence in sentences:
         if not sentence.needs_reference:
+            verdict = FinalVerdict(
+                overall_assessment="NO_REFERENCE_NEEDED",
+                confidence=1.0,
+                primary_sources=[],
+                primary_source_identifiers=[],
+                synthesis="Sentence does not require references; no evidence gathered.",
+                suggested_citation=None,
+                suggested_rewording=None,
+            )
+            results.append((sentence, verdict, []))
             continue
 
         keywords = analyzer.generate_search_keywords(sentence)
@@ -77,5 +87,5 @@ def analyze_paragraph_with_evidence(
         verdict = analyzer.synthesize_verdict(sentence, evaluations)
         results.append((sentence, verdict, evaluations))
 
-    logger.info(f"Completed paragraph analysis with {len(results)} sentences needing references")
+    logger.info(f"Completed paragraph analysis with {len(results)} sentences analyzed")
     return results

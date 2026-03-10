@@ -218,6 +218,43 @@ def test_persist_run_results_creates_records() -> None:
     engine.dispose()
 
 
+def test_persist_run_results_includes_no_reference_sentences() -> None:
+    session, engine = _make_session()
+    sentence = Sentence(
+        text="Background info that needs no citation.",
+        sentence_with_context=None,
+        rewrite_applied=False,
+        needs_reference=False,
+        reason="General knowledge",
+    )
+    verdict = FinalVerdict(
+        overall_assessment="NO_REFERENCE_NEEDED",
+        confidence=1.0,
+        primary_sources=[],
+        primary_source_identifiers=[],
+        synthesis="Sentence does not require references; no evidence gathered.",
+        suggested_citation=None,
+        suggested_rewording=None,
+    )
+    results = [(sentence, verdict, [])]
+
+    run_id = uuid4().hex
+    persist_run_results(
+        session,
+        run_id=run_id,
+        user_id="user-no-ref",
+        mode="paragraph",
+        input_text="Background info that needs no citation.",
+        results=results,
+    )
+
+    assert session.query(SentenceRecord).filter_by(run_id=run_id).count() == 1
+    assert session.query(EvaluationRecord).count() == 0
+    assert session.query(VerdictRecord).count() == 1
+    session.close()
+    engine.dispose()
+
+
 def test_create_queued_run_idempotent() -> None:
     session, engine = _make_session()
     run = create_queued_run(
