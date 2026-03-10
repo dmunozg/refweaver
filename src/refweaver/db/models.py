@@ -86,7 +86,7 @@ class ArticleRecord(Base):
 
     id: Mapped[str] = mapped_column(String(256), primary_key=True)
     source: Mapped[str] = mapped_column(String(64))
-    external_id: Mapped[str] = mapped_column(String(128))
+    external_id: Mapped[str] = mapped_column(String(512))
     title: Mapped[str] = mapped_column(Text)
     authors: Mapped[list[str]] = mapped_column(JSON, default=list)
     year: Mapped[int | None] = mapped_column(nullable=True)
@@ -106,7 +106,7 @@ class EvaluationRecord(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     sentence_id: Mapped[str] = mapped_column(ForeignKey("sentences.id"), index=True)
-    article_id: Mapped[str] = mapped_column(ForeignKey("articles.id"), index=True)
+    article_id: Mapped[str] = mapped_column(String(256), ForeignKey("articles.id"), index=True)
     relevance_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     relevance_reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_relevant: Mapped[bool] = mapped_column(default=False)
