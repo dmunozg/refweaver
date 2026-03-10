@@ -379,6 +379,77 @@ curl -s \
   "http://localhost:8000/runs/7f5f67c58f8842a1acda1339abf8bde4?format=markdown"
 ```
 
+## UI Integration Guide
+
+This section is the canonical backend-consumption flow for frontend clients.
+
+### 1) Async analyze lifecycle
+
+1. `POST /analyze` with text input.
+2. Read `job_id` and `run_id` from the `200` response.
+3. Poll `GET /jobs/{job_id}` until terminal status.
+4. When job status is `finished`, use `run_id` (or `run_url`) to fetch
+   `GET /runs/{run_id}`.
+5. Optional: request `GET /runs/{run_id}?format=markdown` for a rendered report.
+
+### 2) Polling strategy and terminal states
+
+- Recommended poll interval: **1-2 seconds** (start at 1 second, optionally
+  back off to 2 seconds after several attempts).
+- Treat these as terminal:
+  - `finished`: fetch run data from `/runs/{run_id}`
+  - `failed`: surface job failure state to user
+  - `missing`: treat as unavailable/not found
+- Treat non-terminal statuses (for example `queued`, `started`) as in-progress.
+
+### 3) Error handling contract
+
+Expect and handle these classes of failures across endpoints:
+
+- Auth/header failures:
+  - `400` missing `X-User-Id`
+  - `401` invalid `X-API-Key` (when API key is enabled)
+- Quota/limits:
+  - `429` rate limit exceeded (`error_code: rate_limited`)
+  - `413` request/input too large (`request_too_large` or `input_too_long`)
+- Ownership/existence:
+  - `404` run/job not found or not owned by current `X-User-Id`
+- Validation:
+  - `422` payload/query validation errors
+
+For application-level errors, parse:
+
+```json
+{
+  "detail": {
+    "error_code": "string",
+    "message": "string",
+    "details": {"key": "value"}
+  }
+}
+```
+
+For request-size middleware failures, parse the top-level envelope:
+
+```json
+{
+  "error_code": "request_too_large",
+  "message": "Request body exceeds size limit",
+  "details": {"max_bytes": "5000000"}
+}
+```
+
+### 4) Minimum client environment assumptions
+
+- API base URL is reachable (for example `http://localhost:8000`).
+- Client can set required headers on every protected call:
+  - `X-User-Id`
+  - `X-API-Key` when server enforces API key auth
+- Client can send JSON request bodies and parse JSON responses.
+- Client supports polling with timeout/cancel behavior.
+- Payload sizes should stay under `REFWEAVER_MAX_REQUEST_BYTES` and analyze text
+  length should stay under server token limits.
+
 ## Configuration Reference
 
 - `DATABASE_URL`: SQLAlchemy database connection string.
