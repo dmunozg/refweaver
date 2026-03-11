@@ -84,6 +84,53 @@ For route/dependency errors, the envelope is returned under `detail`:
 FastAPI/Pydantic validation failures return `422` with the framework's standard
 validation structure.
 
+## Frontend Data Contracts
+
+This section defines canonical enums and mapping rules frontend clients should
+use when rendering analysis results.
+
+### Run status enum
+
+- `queued`: run exists but persisted analysis results are not complete yet.
+- `completed`: run persistence is complete and sentence/verdict/evaluation data
+  can be fetched from `/runs/{run_id}` and `/report`.
+
+### Final verdict enum (`overall_assessment`)
+
+Returned in `/runs/{run_id}` (`verdicts[*].overall_assessment`) and
+`POST /report` with `format=json` (`sentences[*].verdict`).
+
+- `WELL_SUPPORTED`: strong supporting evidence from analyzed sources.
+- `PARTIALLY_SUPPORTED`: some support exists but with caveats/limitations.
+- `CONTRADICTED`: analyzed evidence contradicts the sentence.
+- `INSUFFICIENT_EVIDENCE`: not enough quality/relevant evidence for confidence.
+- `NOT_SUPPORTED`: analyzed sources do not support the sentence.
+- `NO_REFERENCE_NEEDED`: sentence is judged as common knowledge or otherwise not
+  requiring citation; no evidence lookup is performed.
+
+### Evaluation stance enum (`evaluations[*].stance`)
+
+Per-article stance labels are distinct from final sentence verdicts.
+
+- `SUPPORTS`
+- `CONTRADICTS`
+- `PARTIALLY_SUPPORTS`
+
+### Entity mapping and ordering guarantees
+
+- `sentences[*].id` is the join key for result rendering.
+- `verdicts` is a map keyed by `sentence_id`.
+- `evaluations[*].sentence_id` points to `sentences[*].id`.
+- Sentence ordering in `sentences` and report output follows the analyzed input
+  sentence order.
+
+### Forward compatibility guidance
+
+- Clients should treat enum values as open sets and provide a fallback UI state
+  for unknown future values.
+- Clients should ignore unknown object fields to remain compatible with
+  additive API changes.
+
 ## GET /health
 
 Checks service dependencies and returns DB/Redis health details.
@@ -167,8 +214,22 @@ Retrieves async job state for the requesting user.
 - **Path params:** `job_id` string
 - **Responses:**
   - `200 OK` with job payload when job belongs to `X-User-Id`
-  - `404` if job is missing or belongs to another user (`error_code: not_found`)
+  - `404` if job is missing, expired, or belongs to another user
+    (`error_code: not_found`)
   - `400/401/429` for header/auth/rate-limit errors
+
+### Status values
+
+- Non-terminal: `queued`, `started`
+- Terminal: `finished`, `failed`
+
+### Job retention (important for UI polling)
+
+- Job records may be evicted after completion/failure (deployment default is
+  commonly ~500 seconds in RQ setups).
+- After eviction, polling `GET /jobs/{job_id}` returns `404 not_found`.
+- Frontends should treat this as "job record unavailable" and recover by
+  fetching `GET /runs/{run_id}` when a run id is known.
 
 ### 200 response examples
 
@@ -300,7 +361,7 @@ Builds a report for an existing run owned by the caller.
 {
   "run_id": "7f5f67c58f8842a1acda1339abf8bde4",
   "sentences": [
-    {"id": "s1", "text": "Sentence text", "verdict": "supported"}
+    {"id": "s1", "text": "Sentence text", "verdict": "WELL_SUPPORTED"}
   ]
 }
 ```
@@ -340,7 +401,7 @@ optionally a markdown report.
     "id": "7f5f67c58f8842a1acda1339abf8bde4",
     "user_id": "user-1",
     "mode": "paragraph",
-    "status": "complete",
+    "status": "completed",
     "input_text": "This is a test sentence.",
     "created_at": "2026-03-09T10:00:00+00:00",
     "updated_at": "2026-03-09T10:00:10+00:00"
@@ -359,7 +420,7 @@ optionally a markdown report.
     "id": "7f5f67c58f8842a1acda1339abf8bde4",
     "user_id": "user-1",
     "mode": "paragraph",
-    "status": "complete",
+    "status": "completed",
     "input_text": "This is a test sentence.",
     "created_at": "2026-03-09T10:00:00+00:00",
     "updated_at": "2026-03-09T10:00:10+00:00"
@@ -392,6 +453,9 @@ This section is the canonical backend-consumption flow for frontend clients.
    `GET /runs/{run_id}`.
 5. Optional: request `GET /runs/{run_id}?format=markdown` for a rendered report.
 
+Note: if job state has expired from Redis, `GET /jobs/{job_id}` may return 404;
+in that case, fetch `GET /runs/{run_id}` directly.
+
 ### 2) Polling strategy and terminal states
 
 - Recommended poll interval: **1-2 seconds** (start at 1 second, optionally
@@ -399,8 +463,9 @@ This section is the canonical backend-consumption flow for frontend clients.
 - Treat these as terminal:
   - `finished`: fetch run data from `/runs/{run_id}`
   - `failed`: surface job failure state to user
-  - `missing`: treat as unavailable/not found
 - Treat non-terminal statuses (for example `queued`, `started`) as in-progress.
+- `404 not_found` from `/jobs/{job_id}` should be treated as "job unavailable"
+  (missing, expired, or wrong `X-User-Id`).
 
 ### 3) Error handling contract
 
@@ -449,6 +514,16 @@ For request-size middleware failures, parse the top-level envelope:
 - Client supports polling with timeout/cancel behavior.
 - Payload sizes should stay under `REFWEAVER_MAX_REQUEST_BYTES` and analyze text
   length should stay under server token limits.
+
+### 5) Ownership model and minimal user identity
+
+- RefWeaver does not expose a full `User` resource in this API.
+- `X-User-Id` is a minimal caller identity used as an ownership/sanity check.
+- Purpose: prevent mismatched access across jobs/runs/reports between callers.
+- Practical effect: if `X-User-Id` differs from the creator of a resource,
+  resource fetch endpoints return `404 not_found`.
+- This mechanism is not a substitute for full authentication/authorization; if
+  stronger auth is needed, enforce it upstream (gateway/session/token layer).
 
 ## Configuration Reference
 
