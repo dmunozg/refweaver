@@ -111,6 +111,29 @@ Run the full suite:
 uv run pytest -q
 ```
 
+## Publishing container images
+
+This repository is configured to publish images to GHCR when a version tag is
+pushed.
+
+- Registry: `ghcr.io/dmunozg/refweaver`
+- Trigger: push tags matching `v*.*.*` (for example `v1.4.0`)
+- Published tags for `v1.4.0`:
+  - `1.4.0`
+  - `1.4`
+  - `1`
+  - `latest`
+
+Create and push a release tag:
+
+```bash
+git tag v1.4.0
+git push origin v1.4.0
+```
+
+Published packages are visible at:
+`https://github.com/dmunozg/refweaver/pkgs/container/refweaver`
+
 ## Documentation
 
 - API reference: `docs/API.md`
