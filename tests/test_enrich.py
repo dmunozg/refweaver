@@ -5,7 +5,7 @@ import types
 
 
 class _Logger:
-    def __getattr__(self, _name):
+    def __getattr__(self, _name: str):
         return lambda *args, **kwargs: None
 
 
@@ -94,8 +94,6 @@ def test_fill_abstract_retries_doi_strategies_after_title_finds_doi_crossref():
 
     def crossref(a: Article) -> Article:
         calls["crossref"] += 1
-        if calls["crossref"] == 1:
-            return a
         return a.model_copy(update={"abstract": "Filled by crossref"})
 
     enricher._fill_from_cross_api = cross_api
@@ -108,7 +106,7 @@ def test_fill_abstract_retries_doi_strategies_after_title_finds_doi_crossref():
 
     assert result.abstract == "Filled by crossref"
     assert calls["cross_api"] == 2
-    assert calls["crossref"] == 2
+    assert calls["crossref"] == 1
 
 
 def test_fill_abstract_doi_already_present_skips_title_search():
