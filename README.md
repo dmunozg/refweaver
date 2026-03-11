@@ -2,6 +2,105 @@
 
 RefWeaver analyzes manuscript text, identifies claims that need citations, retrieves relevant literature, and generates sentence-level support verdicts.
 
+## Quick Start (Packaged Container)
+
+These steps run RefWeaver from the published GHCR image (no local build required).
+
+1) Create a working directory and enter it:
+
+```bash
+mkdir -p refweaver && cd refweaver
+```
+
+2) Download the image-based compose file for a tagged release:
+
+```bash
+wget -O compose.yml https://raw.githubusercontent.com/dmunozg/refweaver/v0.2.2/docs/compose.yml
+```
+
+3) Download the environment template directly into `.env`:
+
+```bash
+wget -O .env https://raw.githubusercontent.com/dmunozg/refweaver/v0.2.2/.env.example
+```
+
+4) Edit `.env` and set required values:
+
+- `OPENAI_BASE_URL`
+- `OPENAI_API_KEY`
+- `DB_PASSWORD`
+
+Recommended:
+
+- `OPENROUTER_API_KEY`
+
+5) Pull and start services:
+
+```bash
+podman compose pull
+podman compose up -d
+```
+
+Docker alternative:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+6) Verify service health:
+
+```bash
+curl http://localhost:8000/health
+```
+
+Note: replace `v0.2.2` in the `wget` URLs with any newer release tag.
+
+## Nightly / Build From Source
+
+Use this when you want to run the latest repo state and build images locally.
+
+1) Clone and enter the repository:
+
+```bash
+git clone https://github.com/dmunozg/refweaver.git
+cd refweaver
+```
+
+2) Create `.env` from the example and edit values:
+
+```bash
+cp .env.example .env
+```
+
+Required:
+
+- `OPENAI_BASE_URL`
+- `OPENAI_API_KEY`
+- `DB_PASSWORD`
+
+Recommended:
+
+- `OPENROUTER_API_KEY`
+
+3) Build and run:
+
+```bash
+podman compose up --build -d
+```
+
+Docker alternative:
+
+```bash
+docker compose up --build -d
+```
+
+4) Verify health:
+
+```bash
+curl http://localhost:8000/health
+```
+
 ## What RefWeaver does
 
 - Splits input text into analyzed sentences.
@@ -16,51 +115,6 @@ RefWeaver analyzes manuscript text, identifies claims that need citations, retri
 - `worker`: background job processor (RQ).
 - `redis`: queue backend.
 - `postgres`: persistence for runs/sentences/verdicts/evaluations.
-
-## Prerequisites
-
-Choose one runtime path:
-
-- Containerized: Docker Compose or Podman Compose.
-- Local Python: `uv` (recommended for dependency and venv management).
-
-## First-time run (Docker/Podman)
-
-1) Create your local environment file from the template:
-
-```bash
-cp .env.example .env
-```
-
-2) Edit `.env` and set values for required variables:
-
-- `OPENAI_BASE_URL`
-- `OPENAI_API_KEY`
-- `DB_PASSWORD`
-
-Recommended:
-
-- `OPENROUTER_API_KEY`
-
-If required variables are missing, startup fails immediately due to required-variable checks in `compose.yml`.
-
-3) Start the stack:
-
-```bash
-docker compose up --build
-```
-
-For Podman:
-
-```bash
-podman compose up --build
-```
-
-4) Check health:
-
-```bash
-curl http://localhost:8000/health
-```
 
 ## Quick API usage
 

@@ -1,0 +1,93 @@
+services:
+  migrate:
+    image: ${REFWEAVER_IMAGE:-ghcr.io/dmunozg/refweaver:latest}
+    command: ["sh", "-c", "echo Migration job completed."]
+    env_file:
+      - ../.env
+    environment:
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:?err}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?err}
+      DATABASE_URL: postgresql+psycopg://refweaver:${DB_PASSWORD:?err}@postgres:5432/refweaver
+      REFWEAVER_REDIS_URL: redis://redis:6379/0
+      REFWEAVER_RUN_MIGRATIONS: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    image: ${REFWEAVER_IMAGE:-ghcr.io/dmunozg/refweaver:latest}
+    command: ["python", "-m", "refweaver.api.main"]
+    ports:
+      - "8000:8000"
+    env_file:
+      - ../.env
+    environment:
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:?err}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?err}
+      DATABASE_URL: postgresql+psycopg://refweaver:${DB_PASSWORD:?err}@postgres:5432/refweaver
+      REFWEAVER_REDIS_URL: redis://redis:6379/0
+      REFWEAVER_RUN_MIGRATIONS: "0"
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      worker:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    image: ${REFWEAVER_IMAGE:-ghcr.io/dmunozg/refweaver:latest}
+    command: ["python", "-m", "refweaver.worker"]
+    env_file:
+      - ../.env
+    environment:
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:?err}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?err}
+      DATABASE_URL: postgresql+psycopg://refweaver:${DB_PASSWORD:?err}@postgres:5432/refweaver
+      REFWEAVER_REDIS_URL: redis://redis:6379/0
+      REFWEAVER_RUN_MIGRATIONS: "0"
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "tr '\\0' ' ' < /proc/1/cmdline | grep -q 'refweaver.worker'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: refweaver
+      POSTGRES_DB: refweaver
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?err}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U refweaver -d refweaver"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: docker.io/redis/redis-stack:7.2.0-v9
+    ports:
+      - "6379:6379"
+      - "8001:8001"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  redis-data:
+  postgres-data:
