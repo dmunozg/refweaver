@@ -459,3 +459,6 @@ For request-size middleware failures, parse the top-level envelope:
 - `REFWEAVER_MAX_REQUEST_BYTES`: Max request body size in bytes.
 - `OPENALEX_EMAIL`: Optional OpenAlex config used by enrichment.
 - `SEMANTIC_SCHOLAR_API_KEY`: Optional Semantic Scholar config used by enrichment.
+- `REFWEAVER_HTTP_REFERER`: Outbound `HTTP-Referer` identity for OpenRouter/Perplexity requests.
+- `REFWEAVER_HTTP_TITLE`: Outbound `X-Title` identity for OpenRouter/Perplexity requests.
+- `REFWEAVER_CONTACT_EMAIL`: Contact email used in outbound `User-Agent` for Crossref requests.
