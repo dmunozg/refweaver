@@ -1031,6 +1031,20 @@ class ArticleEnricher:
                 logger.success("Abstract filled via title search")
                 return article
 
+            # If title search found a DOI but not an abstract, retry DOI-based strategies
+            if article.doi and not article.abstract:
+                if try_cross_api:
+                    article = self._fill_from_cross_api(article)
+                    if article.abstract:
+                        logger.success("Abstract filled via title DOI + cross-API lookup")
+                        return article
+
+                if try_crossref:
+                    article = self.enrich_from_crossref(article)
+                    if article.abstract:
+                        logger.success("Abstract filled via title DOI + CrossRef")
+                        return article
+
         # Strategy 5: Extract DOI from PDF (useful when title search is truncated)
         if try_pdf_doi and not article.doi:
             article = self.enrich_from_pdf_doi(article)
