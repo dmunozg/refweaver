@@ -1,60 +1,120 @@
 # RefWeaver
 
-A tool for analyzing scientific manuscript introductions, identifying claims that require references, and assessing their verifiability.
+RefWeaver analyzes manuscript text, identifies claims that need citations, retrieves relevant literature, and generates sentence-level support verdicts.
 
-## What It Does
+## What RefWeaver does
 
-1. **Input**: Takes a paragraph from a scientific manuscript introduction
-2. **Analysis**: Identifies which sentences require a reference
-3. **Search**: Looks for relevant references to support those claims
-4. **Assessment**: Returns a verdict for each sentence:
-   - ✅ **Keep** - Reference found, claim is supported
-   - 📝 **Modify** - Reference found but claim needs to be more precise
-   - ❌ **Delete** - No reference found, claim cannot be verified
+- Splits input text into analyzed sentences.
+- Detects whether each sentence needs references.
+- Retrieves and enriches candidate sources.
+- Produces per-sentence outcomes, including no-reference-needed cases.
+- Exposes async API endpoints for job status, run retrieval, and report generation.
 
-## Project Structure
+## Architecture at a glance
 
+- `api`: FastAPI service (`/health`, `/analyze`, `/jobs/{job_id}`, `/runs/{run_id}`, `/report`).
+- `worker`: background job processor (RQ).
+- `redis`: queue backend.
+- `postgres`: persistence for runs/sentences/verdicts/evaluations.
+
+## Prerequisites
+
+Choose one runtime path:
+
+- Containerized: Docker Compose or Podman Compose.
+- Local Python: `uv` (recommended for dependency and venv management).
+
+## First-time run (Docker/Podman)
+
+1) Create your local environment file from the template:
+
+```bash
+cp .env.example .env
 ```
-refweaver/
-├── src/
-│   ├── __init__.py
-│   ├── analyzer.py      # Sentence analysis & claim detection
-│   ├── searcher.py      # Reference search functionality
-│   └── assessor.py      # Assessment & verdict generation
-├── tests/
-├── data/                # Sample manuscripts for testing
-├── docs/                # Documentation
-└── requirements.txt
-```
 
-## Status
+2) Edit `.env` and set values for required variables:
 
-🚧 Work in progress - initial setup phase
-
-## Podman Compose
-
-Prerequisites: Podman and `podman compose` installed.
-
-Set environment variables in a `.env` file next to `compose.yml` or export them in your shell.
-
-Port is defined in `compose.yml` and can be changed there.
-
-Required environment variables:
 - `OPENAI_BASE_URL`
 - `OPENAI_API_KEY`
 - `DB_PASSWORD`
 
-Database migrations run automatically when the `api` service starts; ensure the database is reachable and credentials are correct so startup can succeed.
+Recommended:
 
-Run the stack:
+- `OPENROUTER_API_KEY`
+
+If required variables are missing, startup fails immediately due to required-variable checks in `compose.yml`.
+
+3) Start the stack:
+
+```bash
+docker compose up --build
 ```
+
+For Podman:
+
+```bash
 podman compose up --build
 ```
 
-Health check:
-```
+4) Check health:
+
+```bash
 curl http://localhost:8000/health
 ```
+
+## Quick API usage
+
+Queue an analysis job:
+
+```bash
+curl -X POST http://localhost:8000/analyze \
+  -H "Content-Type: application/json" \
+  -H "X-User-Id: demo-user" \
+  -d '{"text":"According to WHO reports, vaccination reduced measles mortality. The moon orbits Earth."}'
+```
+
+Use the returned `job_id` and `run_id` to poll job state and fetch results:
+
+- `GET /jobs/{job_id}`
+- `GET /runs/{run_id}`
+- `POST /report`
+
+For full endpoint contracts and response schemas, see `docs/API.md`.
+
+## Local development (without containers)
+
+Install dependencies:
+
+```bash
+uv sync --extra dev
+```
+
+Run API:
+
+```bash
+uv run python -m refweaver.api.main
+```
+
+Run worker (separate shell):
+
+```bash
+uv run python -m refweaver.worker
+```
+
+You still need reachable Redis/Postgres and compatible `.env` values.
+
+## Testing
+
+Run the full suite:
+
+```bash
+uv run pytest -q
+```
+
+## Documentation
+
+- API reference: `docs/API.md`
+- Architecture and operational notes: `docs/`
 
 ## License
 
