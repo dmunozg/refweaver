@@ -1,4 +1,23 @@
 services:
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["sh", "-c", "echo Migration job completed."]
+    env_file:
+      - .env
+    environment:
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:?err}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?err}
+      LLM_BASE_URL: http://host.containers.internal:11435/v1
+      DATABASE_URL: postgresql+psycopg://refweaver:${DB_PASSWORD:?err}@postgres:5432/refweaver
+      REFWEAVER_REDIS_URL: redis://redis:6379/0
+      REFWEAVER_JOB_TIMEOUT: "259200"
+      REFWEAVER_RUN_MIGRATIONS: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api:
     build:
       context: .
@@ -15,6 +34,7 @@ services:
       DATABASE_URL: postgresql+psycopg://refweaver:${DB_PASSWORD:?err}@postgres:5432/refweaver
       REFWEAVER_REDIS_URL: redis://redis:6379/0
       REFWEAVER_JOB_TIMEOUT: "259200"
+      REFWEAVER_RUN_MIGRATIONS: "0"
     depends_on:
       redis:
         condition: service_healthy
@@ -22,6 +42,8 @@ services:
         condition: service_healthy
       worker:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   worker:
     build:
@@ -37,11 +59,14 @@ services:
       DATABASE_URL: postgresql+psycopg://refweaver:${DB_PASSWORD:?err}@postgres:5432/refweaver
       REFWEAVER_REDIS_URL: redis://redis:6379/0
       REFWEAVER_JOB_TIMEOUT: "259200"
+      REFWEAVER_RUN_MIGRATIONS: "0"
     depends_on:
       redis:
         condition: service_healthy
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "tr '\\0' ' ' < /proc/1/cmdline | grep -q 'refweaver.worker'"]
       interval: 10s
