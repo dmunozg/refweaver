@@ -8,6 +8,7 @@ import requests
 from loguru import logger
 from pydantic import HttpUrl
 
+from refweaver.http_identity import build_openrouter_identity_headers
 from refweaver.models import Article
 from refweaver.rate_limit import rate_limit
 from refweaver.retry import retry_call
@@ -67,8 +68,7 @@ class PerplexityAdapter:
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/dmunozg/refweaver",  # Required by OpenRouter
-            "X-Title": "RefWeaver Academic Search",  # Helps with rate limits
+            **build_openrouter_identity_headers(),
         }
 
         payload = {

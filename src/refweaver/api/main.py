@@ -13,6 +13,7 @@ from refweaver.api.routes.runs import router as runs_router
 from refweaver.api.routes.search import router as search_router
 from refweaver.api.settings import SETTINGS
 from refweaver.db.session import get_engine
+from refweaver.http_identity import validate_http_identity_config
 
 
 def create_app() -> FastAPI:
@@ -21,6 +22,7 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     def _startup() -> None:
+        validate_http_identity_config()
         app.state.engine = get_engine(SETTINGS.database_url)
 
     @app.on_event("shutdown")

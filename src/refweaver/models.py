@@ -6,6 +6,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field, HttpUrl
 
+from refweaver.http_identity import build_crossref_user_agent
+
 
 class Sentence(BaseModel):
     """A sentence from a manuscript with reference analysis metadata."""
@@ -313,7 +315,7 @@ class Article(BaseModel):
             url = f"https://doi.org/{self.doi}"
             headers = {
                 "Accept": "application/x-bibtex",
-                "User-Agent": "RefWeaver/1.0 (mailto:diego@asgamers.net)",
+                "User-Agent": build_crossref_user_agent(),
             }
 
             from refweaver.rate_limit import rate_limit
